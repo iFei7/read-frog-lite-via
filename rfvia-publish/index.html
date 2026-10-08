@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Read Frog Lite for Via · 定制版 v1.3.8</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:system-ui,"Noto Sans SC","MiSans","Microsoft YaHei",sans-serif;background:#f4f7f3;color:#1a211c;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{max-width:420px;width:100%;background:#fff;border-radius:28px;padding:32px 26px;box-shadow:0 12px 40px rgba(24,48,33,.10)}
+  .frog{width:56px;height:56px;border-radius:50%;background:linear-gradient(145deg,#70a989,#4d6656);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 8px 24px rgba(28,68,44,.22)}
+  .frog svg{width:38px;height:38px}
+  h1{font-size:20px;font-weight:780;text-align:center;letter-spacing:-.02em}
+  .ver{text-align:center;font-size:13px;color:#59645d;margin-top:6px}
+  .badge{display:inline-block;background:#d4eadb;color:#183326;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;margin-top:10px}
+  .tags{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .dl{display:block;width:100%;margin-top:24px;padding:16px;border:0;border-radius:18px;background:linear-gradient(145deg,#70a989,#4d6656);color:#fff;font-size:16px;font-weight:760;text-align:center;text-decoration:none;box-shadow:0 6px 18px rgba(28,68,44,.26)}
+  .dl:active{transform:scale(.98)}
+  .raw{display:block;text-align:center;margin-top:12px;font-size:12.5px;color:#4d6656;text-decoration:underline;text-underline-offset:3px;word-break:break-all}
+  .steps{margin-top:22px;border-top:1px solid #e7ede7;padding-top:18px}
+  .steps h2{font-size:13px;color:#4d6656;font-weight:760;letter-spacing:.04em;margin-bottom:10px}
+  .steps li{font-size:13.5px;color:#333c36;line-height:1.7;margin-left:18px}
+  .note{margin-top:16px;font-size:11.5px;color:#8a948d;line-height:1.6;background:#f4f7f3;border-radius:14px;padding:10px 14px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="frog" aria-hidden="true">
+    <svg viewBox="0 0 48 48" aria-hidden="true"><circle fill="#d4eadb" cx="15" cy="15" r="7"/><circle fill="#d4eadb" cx="33" cy="15" r="7"/><ellipse fill="#d4eadb" cx="24" cy="28" rx="18" ry="14"/><circle fill="#183326" cx="15" cy="15" r="2.5"/><circle fill="#183326" cx="33" cy="15" r="2.5"/><circle fill="#183326" cx="21" cy="25" r="1.2"/><circle fill="#183326" cx="27" cy="25" r="1.2"/><path fill="none" stroke="#d87969" stroke-width="3" stroke-linecap="round" d="M15 29c2.6 4 6 5.5 9 5.5s6.4-1.5 9-5.5"/></svg>
+  </div>
+  <h1>Read Frog Lite for Via</h1>
+  <div class="ver">定制版 v1.3.8 · 基于上游 v1.2.1</div>
+  <div class="tags">
+    <span class="badge">悬浮球开关</span>
+    <span class="badge">手势档位可选</span>
+    <span class="badge">视口优先翻译</span>
+    <span class="badge">GPL-3.0</span>
+  </div>
+  <a class="dl" href="read-frog-lite-via-v1.3.8.user.js" download>下载脚本文件</a>
+  <a class="raw" href="read-frog-lite-via-v1.3.8.user.js">或长按复制此直链 → read-frog-lite-via-v1.3.8.user.js</a>
+  <div class="steps">
+    <h2>Via 安装步骤</h2>
+    <ol>
+      <li>点上方按钮下载 .user.js 文件</li>
+      <li>Via 菜单 → 设置 → 脚本</li>
+      <li>右上角 ➕ → 本地导入，选择下载的文件</li>
+      <li>启用脚本，刷新网页即可看到青蛙悬浮球</li>
+    </ol>
+  </div>
+  <div class="note">v1.3.8：元信息归属本定制版——@namespace 与 @author 指向 iFei7/read-frog-lite-via（ifei），上游 Read Frog 出处与 GPL-3.0 声明原样保留。手势档位可配置——设置面板提供「双指/三指/四指」选择，默认四指，改完即时生效无需刷新；识别策略不变：多指长按 320ms 触发，300ms 内先后落齐即可（无需同瞬间），系统吞掉触摸序列不再导致按住无反应，圆形 slop 容差让斜向抖动不误杀，触发后 1.5 秒去抖。悬浮球开关、视口优先翻译等既有能力保持不变。本定制版由 ifei 维护，基于上游 Read Frog，GPL-3.0 开源。</div>
+</div>
+</body>
+</html>
