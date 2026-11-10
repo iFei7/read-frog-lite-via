@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Read Frog Lite for Via
 // @namespace    https://github.com/iFei7/read-frog-lite-via
-// @version      1.3.8
+// @version      1.3.9
 // @description  为 Via 优化的移动端网页翻译：渐进式翻译、原文切换、自动翻译与多服务支持
 // @author       ifei
 // @license      GPL-3.0-only
@@ -29,6 +29,13 @@
  * https://github.com/iFei7/read-frog-lite-via
  *
  * Licensed under GNU GPL v3.0.
+ *
+ * Local modifications (v1.3.9):
+ * - 多指按压语义统一为「原文/译文」二态循环：空闲按压开始翻译；翻译中或已译完按压
+ *   一步完成「停止翻译 + 显示原文」；停在原文时再按压立即显示已有译文（不重新请求）
+ *   并继续翻译剩余段落
+ * - 新增 paused 状态：原文视图期间中止在途请求、暂停观察器，记录与翻译缓存全部保留，
+ *   因此来回切换不会重复计费；恢复译文时由全量重扫补齐暂停期间新增的内容
  *
  * Local modifications (v1.3.8):
  * - 元信息归属定制版：@namespace / @author 指向 iFei7/read-frog-lite-via（ifei），
@@ -167,7 +174,7 @@
   // 配置与持久化状态
   // ---------------------------------------------------------------------------
 
-  var VERSION = "1.3.8";
+  var VERSION = "1.3.9";
   var CONFIG_KEY = "read_frog_via_config_v2";
   var OLD_CONFIG_KEY = "read_frog_via_config_v1";
   var TRANSLATION_CACHE_KEY = "read_frog_via_translation_cache_v1";
@@ -344,6 +351,9 @@
   var app = {
     phase: "idle",
     active: false,
+    // 原文视图（v1.3.9）：true 表示页面当前只显示原文，但 records 与缓存仍然保留，
+    // 再次按压可直接回渲染已有译文，不必重新请求。
+    originalView: false,
     jobId: 0,
     records: new Map(),
     requests: new Set(),
@@ -2098,8 +2108,12 @@
 
   function updateActionLabels() {
     var busy = isBusyPhase();
-    $("action-translate").querySelector(".action-label").textContent = busy ? "停止" : "翻译";
-    $("action-translate").querySelector(".action-icon").innerHTML = busy ? UI_ICONS.stop : UI_ICONS.translate;
+    // 按钮文案跟随二态视图：原文视图 → 显示译文；译文视图（忙碌或已译完）→ 显示原文；否则翻译。
+    var original = app.originalView;
+    var label = original ? "显示译文" : (busy || app.active) ? "显示原文" : "翻译";
+    $("action-translate").querySelector(".action-label").textContent = label;
+    // 图标：停译能力只在译文视图的忙碌态出现；原文视图与空闲态都用「翻译」图标。
+    $("action-translate").querySelector(".action-icon").innerHTML = (busy && !original) ? UI_ICONS.stop : UI_ICONS.translate;
     $("action-mode").querySelector(".action-label").textContent = config.mode === "bilingual" ? "仅译文" : "双语";
   }
 
@@ -2293,7 +2307,7 @@
     }
     if (isBusyPhase()) return;
     try { validateConfig(config); } catch (error) { openSettings(); showSettingsStatus(error.message, true); return; }
-    app.active = true; var jobId = ++app.jobId;
+    app.active = true; app.originalView = false; var jobId = ++app.jobId;
     app.deferredCandidates = null;
     // 新任务从零开始记账：上一次任务（含被 stopTranslation 中断的）遗留的
     // 剪枝区域即使还未补扫，也会在本次全页扫描中按当前视口重新判定。
@@ -2349,12 +2363,55 @@
 
   function restorePage() {
     pendingStart = false; bodyReadyHandler = null;
-    stopTranslation(); app.active = false; app.rescanPending = false; app.roundPending = false; app.deferredCandidates = null; app.mutationScope = null; deferredRoots = []; stopObserver();
+    stopTranslation(); app.active = false; app.originalView = false; app.rescanPending = false; app.roundPending = false; app.deferredCandidates = null; app.mutationScope = null; deferredRoots = []; stopObserver();
     app.records.forEach(cleanupRecord); app.records.clear(); app.counters = emptyCounters();
     // 候选扫描可能包装了尚未进入队列的交互文字，恢复时也必须一并还原。
     Array.prototype.slice.call(document.querySelectorAll("." + SOURCE_SEGMENT_CLASS)).forEach(unwrapSourceSegment);
     Array.prototype.slice.call(document.querySelectorAll("." + UI_LABEL_CLASS)).forEach(function (node) { node.classList.remove(UI_LABEL_CLASS); });
     setPhase("idle");
+  }
+
+  // ---------------------------------------------------------------------------
+  // 按压二态循环：原文视图 / 译文视图
+  //
+  // 与 restorePage 的区别：这里只切"显示层"，records 与翻译缓存全部保留，
+  // 因此反复按压不会重新请求；restorePage 仍是彻底还原（菜单项用）。
+  // ---------------------------------------------------------------------------
+
+  // 停止翻译并切到原文视图：保留 record 与缓存，供再次按压秒回译文。
+  function enterOriginalView() {
+    // 翻译中按压要"一步到位"：先中止在途请求（phase 落在 partial），再整体切回原文。
+    if (isBusyPhase()) stopTranslation();
+    app.records.forEach(clearRecordRendering);
+    // 暂停期间页面变更不再自动翻译；恢复时由 startTranslation() 的全量重扫补齐。
+    stopObserver();
+    app.originalView = true;
+    // paused 不在 isBusyPhase 的忙碌集合里，天然被视为空闲，可再次按压回到译文。
+    setPhase("paused");
+    updateActionLabels();
+    showGestureToast("已显示原文");
+  }
+
+  // 切回译文视图：先即时回渲染已有译文，再继续翻译未完成段落。
+  function showTranslatedView() {
+    app.originalView = false;
+    app.records.forEach(function (record) {
+      if (record.status === "success" || record.status === "failed") renderRecord(record);
+    });
+    var unfinished = false;
+    app.records.forEach(function (record) {
+      if (record.status === "pending" || record.status === "failed") unfinished = true;
+    });
+    if (unfinished) {
+      // 无参调用 = 全量重扫 + 续翻：已成功的段落靠 records 判定与缓存命中，不会重复请求。
+      // 这里不 await：手势回调不能被翻译流程阻塞。
+      frogSummoned = true;
+      startTranslation();
+    } else {
+      setPhase(app.counters.failed ? "partial" : "complete");
+      updateActionLabels();
+    }
+    showGestureToast("已显示译文");
   }
 
   async function retryRecord(record) {
@@ -2484,7 +2541,9 @@
 
   function applyMode(mode) {
     saveConfig({ mode:mode });
-    app.records.forEach(function (record) { if (record.status === "success" || record.status === "failed") renderRecord(record); });
+    // 原文视图下只记住显示模式偏好：立即重渲染会让译文突然冒出来，破坏"停在原文"的状态。
+    // 回到译文视图时 showTranslatedView 会按新 mode 重新渲染。
+    if (!app.originalView) app.records.forEach(function (record) { if (record.status === "success" || record.status === "failed") renderRecord(record); });
     updateActionLabels();
   }
 
@@ -2610,7 +2669,7 @@
     gestureToastTimer = setTimeout(function () { gestureToast.classList.remove("show"); }, 1400);
   }
 
-  // 四指长按屏幕：在翻译结果与原文之间切换。翻译进行中长按=停止。
+  // 四指长按屏幕：在「原文 / 译文」两种视图间循环。翻译中长按 = 停译并直接显示原文。
   // 识别策略按真机反馈调整过一轮，核心是「不因为系统抢走触摸序列就判失败」：
   //  - 落指允许滑动时间窗（FOUR_FINGER_LAND_WINDOW_MS），4 根手指不必同一瞬间在屏；
   //  - 落屏后有 settle 期（FOUR_FINGER_SETTLE_MS）忽略坐标跳变；
@@ -2661,8 +2720,10 @@
     var now = Date.now();
     if (now - lastFourFingerAt < FOUR_FINGER_DEBOUNCE_MS) return;
     lastFourFingerAt = now;
-    if (isBusyPhase()) { stopTranslation(); showGestureToast("已停止翻译"); return; }
-    if (app.active) { restorePage(); showGestureToast("已恢复原文"); return; }
+    // 二态循环：原文视图优先级最高（即使 phase 异常地仍处于忙碌态，也先回到译文）。
+    if (app.originalView) { showTranslatedView(); return; }
+    // 翻译中或已译完：一步完成「停止 + 显示原文」，提示文案由 enterOriginalView 负责。
+    if (isBusyPhase() || app.active) { enterOriginalView(); return; }
     try { validateConfig(config); } catch (error) { openSettings(); showSettingsStatus(error.message, true); return; }
     frogSummoned = true;
     startTranslation();
@@ -2747,7 +2808,9 @@
 
   $("action-translate").addEventListener("click", function () {
     closeActions();
-    if (isBusyPhase()) stopTranslation();
+    // 与多指按压同一套二态语义：原文视图 → 显示译文（续翻）；译文视图 → 显示原文；空闲 → 开始。
+    if (app.originalView) showTranslatedView();
+    else if (isBusyPhase() || app.active) enterOriginalView();
     else { frogSummoned=true; startTranslation(); }
   });
   $("action-mode").addEventListener("click", function () { applyMode(config.mode === "bilingual" ? "translation" : "bilingual"); });

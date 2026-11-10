@@ -51,7 +51,7 @@ function moved(dx, dy, radius) {
 
 function createHarness(options) {
   options = options || {};
-  const log = { fired: 0, stopped: 0, restored: 0, openedSettings: 0, toasts: [] };
+  const log = { fired: 0, stopped: 0, restored: 0, openedSettings: 0, enteredOriginal: 0, shownTranslated: 0, toasts: [] };
   // 贴近真实 Date.now()（绝对时间）：若从 0 起算，首次触发会落在 1.5s 去抖窗口内被误杀。
   let time = 1000000000000;
   let seq = 0;
@@ -83,7 +83,8 @@ function createHarness(options) {
     "document", "host", "settings", "Date", "setTimeout", "clearTimeout",
     "isBusyPhase", "stopTranslation", "restorePage", "validateConfig", "openSettings",
     "showSettingsStatus", "startTranslation", "showGestureToast",
-    "var app = { active: " + (options.appActive ? "true" : "false") + " };\n" +
+    "enterOriginalView", "showTranslatedView",
+    "var app = { active: " + (options.appActive ? "true" : "false") + ", originalView: " + (options.originalView ? "true" : "false") + " };\n" +
     "var frogSummoned = false;\n" +
     // 真实脚本里 config 是宿主 IIFE 的全局（fireFourFingerGesture 里 validateConfig(config)
     // 会先求值它）。沙箱漏掉它时，求值 config 抛 ReferenceError 被 catch 接住，走 openSettings
@@ -106,7 +107,11 @@ function createHarness(options) {
     function () { log.openedSettings++; },
     function (message) { log.toasts.push("status:" + message); },
     function () { log.fired++; },
-    function (text) { log.toasts.push(text); }
+    function (text) { log.toasts.push(text); },
+    // enterOriginalView / showTranslatedView 只记录调用：真实实现里的 records / 渲染行为
+    // 由 tests/test-view-toggle.cjs 单独覆盖，这里只验证手势块的分支选择。
+    function () { log.enteredOriginal++; },
+    function () { log.shownTranslated++; }
   );
 
   return {
@@ -309,22 +314,24 @@ test("10b. 触点不报半径时 12px 位移 → 超出 10px 下限，取消", f
   assertEq(h.log.fired, 0, "取消后不得触发");
 });
 
-test("11. 状态循环：翻译进行中 → stopTranslation + 「已停止翻译」", function () {
-  const h = createHarness({ busy: true });
+test("11. 状态循环：翻译进行中 → enterOriginalView（一步显示原文），不自行停止", function () {
+  const h = createHarness({ appActive: true, busy: true });
   h.fire("touchstart", fourFingers());
   h.advance(320);
-  assertEq(h.log.stopped, 1, "应停止翻译");
+  assertEq(h.log.enteredOriginal, 1, "应切到原文视图");
+  assertEq(h.log.stopped, 0, "停止请求应由 enterOriginalView 内部完成，手势块不再直接调用");
   assertEq(h.log.fired, 0, "不应开始翻译");
-  assertEq(h.log.toasts[0], "已停止翻译", "toast 文案应保持");
+  assertEq(h.log.toasts.length, 0, "提示文案由 enterOriginalView 负责，手势块不再重复");
 });
 
-test("12. 状态循环：已有译文 → restorePage + 「已恢复原文」", function () {
+test("12. 状态循环：已译完（active 且非 busy）→ enterOriginalView", function () {
   const h = createHarness({ appActive: true });
   h.fire("touchstart", fourFingers());
   h.advance(320);
-  assertEq(h.log.restored, 1, "应恢复原文");
+  assertEq(h.log.enteredOriginal, 1, "应切到原文视图");
+  assertEq(h.log.restored, 0, "不再走彻底还原，记录与缓存需保留");
   assertEq(h.log.fired, 0, "不应开始翻译");
-  assertEq(h.log.toasts[0], "已恢复原文", "toast 文案应保持");
+  assertEq(h.log.toasts.length, 0, "提示文案由 enterOriginalView 负责");
 });
 
 test("13. 状态循环：配置无效 → openSettings + 状态提示，不开翻译", function () {
@@ -407,6 +414,35 @@ test("19. gestureFingers=3：3 指触发；第 4 指不参与也不取消", func
   assertEq(h.log.fired, 0, "计时不得被第 4 指重置");
   h.advance(1);
   assertEq(h.log.fired, 1, "三指档位下凑满 3 指应照常触发");
+});
+
+test("20. 状态循环：原文视图（originalView=true）→ showTranslatedView，不重复启动翻译", function () {
+  const h = createHarness({ appActive: true, originalView: true });
+  h.fire("touchstart", fourFingers());
+  h.advance(320);
+  assertEq(h.log.shownTranslated, 1, "应切回译文视图");
+  assertEq(h.log.enteredOriginal, 0, "不应再次进入原文视图");
+  assertEq(h.log.fired, 0, "手势块不直接启动翻译（续翻由 showTranslatedView 内部决定）");
+  assertEq(h.log.toasts.length, 0, "提示文案由 showTranslatedView 负责");
+});
+
+test("21. 状态循环：空闲（未翻译）→ startTranslation + 「开始翻译」", function () {
+  const h = createHarness();
+  h.fire("touchstart", fourFingers());
+  h.advance(320);
+  assertEq(h.log.fired, 1, "空闲时应开始翻译");
+  assertEq(h.log.enteredOriginal, 0, "不应进入原文视图");
+  assertEq(h.log.shownTranslated, 0, "不应调用显示译文");
+  assertEq(h.log.toasts[0], "开始翻译", "应提示开始翻译");
+});
+
+test("22. 状态循环：originalView 与 busy 同时为真（异常态）→ 仍优先 showTranslatedView", function () {
+  const h = createHarness({ appActive: true, busy: true, originalView: true });
+  h.fire("touchstart", fourFingers());
+  h.advance(320);
+  assertEq(h.log.shownTranslated, 1, "原文视图优先级最高");
+  assertEq(h.log.enteredOriginal, 0, "不得反向再进原文视图");
+  assertEq(h.log.fired, 0, "手势块不直接启动翻译");
 });
 
 /* -------------------------------------------------------------------- 输出 */

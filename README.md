@@ -1,6 +1,6 @@
 # Read Frog Lite for Via
 
-面向 Via 浏览器的单文件网页翻译用户脚本（当前 **v1.3.8**），基于上游 [Read Frog](https://github.com/mengxi-ream/read-frog) 二次开发，采用 GPL-3.0-only 发布。
+面向 Via 浏览器的单文件网页翻译用户脚本（当前 **v1.3.9**），基于上游 [Read Frog](https://github.com/mengxi-ream/read-frog) 二次开发，采用 GPL-3.0-only 发布。
 
 > 本项目基于 [Read Frog](https://github.com/mengxi-ream/read-frog) 进行二次开发。
 > This project is a modified work based on Read Frog.
@@ -73,6 +73,7 @@ git add -A && git commit -m "feat: ..."
 - 页面加载期间尽早显示悬浮球，并兼容限制内联样式的严格 CSP 网站
 - 渐进式网页正文翻译，优先处理当前阅读区域，并让批量结果逐条自然显示
 - 双语对照与“直接替换原文”模式，可随时切换或恢复原文
+- 多指按压在“原文 / 译文”之间二态循环：翻译中按压一步停译并显示原文，停在原文时再按压秒回已有译文并继续翻译剩余段落
 - 可为指定网站开启自动翻译，默认仍保持手动触发
 - Microsoft 免费翻译、OpenAI、DeepSeek 与 OpenAI Compatible API
 - 跨页面本地翻译缓存、批量控制、并发控制、失败段落单独重试
@@ -89,7 +90,7 @@ git add -A && git commit -m "feat: ..."
 2. 将文件传到 Android 设备，或复制完整脚本内容。
 3. 在 Via 中打开“设置 → 脚本”，从本地导入脚本或新建脚本后粘贴保存。
 4. 启用脚本并刷新网页。页面右侧会出现半隐藏的青蛙悬浮球。
-5. 轻点一次悬浮球将其呼出；再次轻点开始翻译。长按可打开翻译模式、恢复原文与设置等操作。
+5. 轻点一次悬浮球将其呼出；再次轻点开始翻译。长按可打开翻译模式、恢复原文与设置等操作。也可用多指长按（默认四指）在原文与译文之间切换：译文视图中按压一步显示原文，原文视图中按压立即回到译文。
 
 > Via 的菜单名称可能因版本或语言略有不同；核心步骤是导入并启用用户脚本，然后刷新目标网页。
 
