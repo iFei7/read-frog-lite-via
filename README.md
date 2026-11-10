@@ -1,6 +1,6 @@
 # Read Frog Lite for Via
 
-面向 Via 浏览器的单文件网页翻译用户脚本（当前 **v1.3.9**），基于上游 [Read Frog](https://github.com/mengxi-ream/read-frog) 二次开发，采用 GPL-3.0-only 发布。
+面向 Via 浏览器的单文件网页翻译用户脚本（当前 **v1.4.0**），基于上游 [Read Frog](https://github.com/mengxi-ream/read-frog) 二次开发，采用 GPL-3.0-only 发布。
 
 > 本项目基于 [Read Frog](https://github.com/mengxi-ream/read-frog) 进行二次开发。
 > This project is a modified work based on Read Frog.
@@ -15,8 +15,10 @@
 | --- | --- |
 | `src/read-frog-lite-via.user.js` | **唯一可编辑源文件**（定制版，含 `// @version`），所有改动都落在这里 |
 | `upstream/read-frog-lite-via-1.2.1.user.js` | 上游 v1.2.1 原版基线，只读参考，用于对比定制改动 |
-| `tests/test-four-finger.cjs` | 多指手势回归测试（22 用例），从源码按标记截取真实代码执行 |
-| `tests/test-persist.cjs` | 配置持久化回归测试（13 用例），截取配置层在 vm 沙箱里跑 |
+| `tests/test-four-finger.cjs` | 多指手势回归测试（25 用例），从源码按标记截取真实代码执行 |
+| `tests/test-persist.cjs` | 配置持久化回归测试（18 用例），截取配置层在 vm 沙箱里跑 |
+| `tests/test-view-toggle.cjs` | 原文/译文二态切换与轻点语义测试（29 项断言），截取 `restorePage`~`retryRecord` 与 `dragEnd` |
+| `tests/test-free-providers.cjs` | 免费通道测试（49 项断言），按 `免费通道 BEGIN/END` 标记截取后注入请求桩，全程不联网 |
 | `tests/test-via-port.mjs` | 既有端到端测试（依赖 playwright，未随仓库安装） |
 | `scripts/release.cjs` | 零依赖发布脚本：读版本号 → 同步 `rfvia-publish/` |
 | `docs/` | 开发指南、分析报告、优化方向记录与 `images/` |
@@ -27,7 +29,7 @@
 
 ```bash
 # 1. 只改 src/read-frog-lite-via.user.js
-# 2. 语法检查 + 回归测试（必须 22/22 与 13 通过 / 0 失败）
+# 2. 语法检查 + 回归测试（必须 25/25、18/0、29/0、49/0 全绿）
 npm run check
 npm test
 # 3. 同步发布产物（读 @version → 生成 .user.js/.txt → 改 index.html）
@@ -42,12 +44,12 @@ git add -A && git commit -m "feat: ..."
 
 新服务不是改一处就够，下面四处必须联动（缺一处会出现「设置里选得到但翻译报错」或「有响应但缓存串味」）：
 
-1. **服务枚举**：`DEFAULT_CONFIG.service` 默认值 + `normalizeConfig()` 里的 `isOneOf(source.service, [...])` 白名单，加上新的 `service` 取值。
-2. **设置面板**：`<select id="service">` 增加 `<option>`；`updateServiceFields()` 里同步 `ai-fields` 显隐、`custom-endpoint-wrap` 显隐与模型下拉候选。
-3. **端点解析**：`resolvedEndpoint()` 为新服务返回固定地址（或走 `custom` 的自定义地址补全逻辑）。
-4. **翻译分发**：`requestTranslations()` 里的 `providerCall` 按 `cfg.service` 分发，新增分支调用对应的 `xxxTranslate()` 实现（现有两条：`microsoftTranslate()` 与 `aiTranslate()`）；若请求体不走 Chat Completions 格式，需要单独写请求与解析。
+1. **服务枚举**：`SERVICE_CHOICES` 白名单（`normalizeConfig()` 用它校验）+ `FREE_SERVICES`（免 key 通道登记）+ 设置面板 `<select id="service">` 增加 `<option>`。
+2. **设置面板**：`updateServiceFields()` 的 `ai-fields` / `custom-endpoint-wrap` 显隐由 `FREE_SERVICES` 决定；`updateEndpointPreview()` 为免 key 通道显示「无需配置」或降级顺序。
+3. **校验**：`validateConfig()` 对 `FREE_SERVICES[cfg.service]` 直接放行，不再强制 Key/模型/接口地址。
+4. **翻译分发**：`requestTranslations()` 的 `providerCall` 按 `cfg.service` 分发到对应 `xxxTranslate()`；非 Chat Completions 的请求请写在 `// === 免费通道 BEGIN/END ===` 标记区内，便于测试整体截取。
 
-补充检查点：`migrateConfig()` 的旧配置迁移（`provider`/`endpoint` → `service`）、缓存键（`translationCacheKey()` 会带上服务标识，避免不同服务共用缓存）、`validateConfig()` 的必填校验。
+补充检查点：`migrateConfig()` 的旧配置迁移（`provider`/`endpoint` → `service`）、缓存键（`translationCacheKey()` 已带服务标识）、`requestWithRetry()` 的最后一个 `method` 参数（GET 通道传 `"GET"` 且 body 传 `null`）。
 
 ## 测试桩的两个已知坑
 
@@ -75,7 +77,7 @@ git add -A && git commit -m "feat: ..."
 - 双语对照与“直接替换原文”模式，可随时切换或恢复原文
 - 多指按压在“原文 / 译文”之间二态循环：翻译中按压一步停译并显示原文，停在原文时再按压秒回已有译文并继续翻译剩余段落
 - 可为指定网站开启自动翻译，默认仍保持手动触发
-- Microsoft 免费翻译、OpenAI、DeepSeek 与 OpenAI Compatible API
+- Microsoft 免费翻译、有道、MyMemory、Google（需可访问 Google）、自动降级链、OpenAI、DeepSeek 与 OpenAI Compatible API
 - 跨页面本地翻译缓存、批量控制、并发控制、失败段落单独重试
 - 限流与服务端错误自动退避重试，点击停止翻译会立即中止
 - 长文没有段落数量上限，超长段落切分翻译后无损拼回
@@ -98,14 +100,24 @@ git add -A && git commit -m "feat: ..."
 
 长按悬浮球，选择“设置”即可配置服务、语言、显示模式、每批段落数与并发数。开启“总是自动翻译此网站”后，脚本会记住当前域名，并在以后访问该域名时自动翻译。
 
-| 服务 | 是否需要 API Key | 说明 |
-| --- | --- | --- |
-| Microsoft | 否 | 默认免费服务，适合首次使用与日常阅读。 |
-| OpenAI | 是 | 使用官方 Chat Completions 接口。 |
-| DeepSeek | 是 | 脚本固定使用 `https://api.deepseek.com/chat/completions`。 |
-| Custom API | 通常需要 | 兼容 OpenAI Chat Completions 的自定义服务；填写基础地址即可，脚本会补全 `/chat/completions`。 |
+## 翻译通道
 
-对于 OpenAI、DeepSeek 与自定义接口，请填写自己的 API Key 和模型名称。请先使用“测试服务”确认配置可用，再翻译网页。
+| 通道 | 是否需要 Key | 批量能力 | 限流 / 风险 |
+| --- | --- | --- | --- |
+| Microsoft（Edge 接口） | 否 | 原生数组批量，按序对齐；单条可达 9800 字符 | 实测 200 条 / 0.43–0.82s，20 次连打未见限流；空数组会 400（脚本已拦截） |
+| 有道（aidemo） | 否 | 用 `\n` 拼接，段数一致才回填，不一致自动逐条重发 | 单请求 ≤1000 字符（脚本按 900 切片）；超长或频控返回 `errorCode:411` |
+| MyMemory | 否 | 无批量，逐条串行 | 500 字符硬限；超长时 HTTP 仍是 200，但 `responseStatus:"403"` 且译文为 `QUERY LENGTH LIMIT EXCEEDED...`（脚本已拦截，不会当译文渲染） |
+| Google（gtx 免 key） | 否 | 无稳定批量，逐条 GET，3 条一批 | **中国大陆不可直连**，仅可访问 Google 的网络下可用，因此不进入自动降级链 |
+| OpenAI / DeepSeek / 自定义 | 是 | 由模型一次性返回 JSON 数组 | 受各自额度与速率限制；需填写 Key 与模型 |
+| 自动（`auto`） | 否 | 按 **Edge → 有道 → MyMemory** 依次尝试 | 任一通道成功即返回；全失败才报错，错误信息会附各通道原因 |
+
+说明：
+
+- 「自动」只在免费通道之间降级，不包含 Google —— 大陆网络下 Google 只会多等一轮超时，让降级链变慢。
+- Google 需要代理或境外网络才能使用；在网络可达时它作为独立选项手动选择，稳定性和速度不如 Edge。
+- 免 key 通道同样会把页面正文发送到对应服务商，隐私边界与本项目其他通道一致。
+
+对于 OpenAI、DeepSeek 与自定义接口，请填写自己的 API Key 和模型名称；Microsoft、有道、MyMemory、Google 与「自动」均无需填写任何 Key。请先使用“测试服务”确认配置可用，再翻译网页。
 
 目标语言为中文等字符体系明确的语言时，脚本会在请求前跳过已经是目标语言的纯文本，以及 URL、邮箱、纯数字、金额与版本号等内容；中外文混合段落仍会发送给翻译服务。AI 批量输出格式异常时会使用受控并行补救，减少逐段等待；遇到限流或服务端错误时按指数退避自动重试，最多 3 次。
 
@@ -122,7 +134,7 @@ git add -A && git commit -m "feat: ..."
 - API Key 保存在 Via 的本地用户脚本存储中，不会由本脚本上传到开发者服务器；它不是加密保险库，请不要在不受信任或多人共用的设备上保存敏感 Key。
 - 为减少重复请求，脚本会在本地保存容量受限的原文与译文缓存（最多约 300 条）；缓存键不包含 API Key，清除 Via 的脚本数据即可移除缓存。
 - 在你手动翻译网页、为当前网站开启自动翻译或测试服务时，待翻译文本会发送给你选择的翻译服务。
-- 使用 Microsoft 服务时，文本会发送到 Microsoft 翻译服务；使用 AI 或自定义服务时，文本会发送到对应 API 提供方。请同时阅读该服务提供方的隐私政策。
+- 使用 Microsoft 服务时，文本会发送到 Microsoft 翻译服务；使用有道 / MyMemory / Google 时，文本会发送到对应服务商（「自动」会在降级时依次尝试前两者）；使用 AI 或自定义服务时，文本会发送到对应 API 提供方。请同时阅读该服务提供方的隐私政策。
 - 本脚本不包含统计、遥测、广告或开发者数据收集代码。
 - 脚本声明 `GM_xmlhttpRequest` 和 `@connect *`，是为了在 Via 中绕过网页跨域限制，并支持用户自行配置的 OpenAI Compatible API。请只填写可信服务地址，并妥善保管 API Key。
 

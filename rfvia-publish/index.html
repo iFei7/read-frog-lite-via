@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Read Frog Lite for Via · 定制版 v1.3.9</title>
+<title>Read Frog Lite for Via · 定制版 v1.4.0</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:system-ui,"Noto Sans SC","MiSans","Microsoft YaHei",sans-serif;background:#f4f7f3;color:#1a211c;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -29,16 +29,16 @@
     <svg viewBox="0 0 48 48" aria-hidden="true"><circle fill="#d4eadb" cx="15" cy="15" r="7"/><circle fill="#d4eadb" cx="33" cy="15" r="7"/><ellipse fill="#d4eadb" cx="24" cy="28" rx="18" ry="14"/><circle fill="#183326" cx="15" cy="15" r="2.5"/><circle fill="#183326" cx="33" cy="15" r="2.5"/><circle fill="#183326" cx="21" cy="25" r="1.2"/><circle fill="#183326" cx="27" cy="25" r="1.2"/><path fill="none" stroke="#d87969" stroke-width="3" stroke-linecap="round" d="M15 29c2.6 4 6 5.5 9 5.5s6.4-1.5 9-5.5"/></svg>
   </div>
   <h1>Read Frog Lite for Via</h1>
-  <div class="ver">定制版 v1.3.9 · 基于上游 v1.2.1</div>
+  <div class="ver">定制版 v1.4.0 · 基于上游 v1.2.1</div>
   <div class="tags">
     <span class="badge">悬浮球开关</span>
     <span class="badge">手势档位可选</span>
     <span class="badge">视口优先翻译</span>
     <span class="badge">GPL-3.0</span>
   </div>
-  <a class="dl" href="read-frog-lite-via-v1.3.9.user.js" download>下载脚本文件</a>
-  <a class="raw" href="read-frog-lite-via-v1.3.9.user.js">或长按复制此直链 → read-frog-lite-via-v1.3.9.user.js</a>
-  <a class="raw" href="read-frog-lite-via-v1.3.9.txt">纯文本版（.txt）→ read-frog-lite-via-v1.3.9.txt</a>
+  <a class="dl" href="read-frog-lite-via-v1.4.0.user.js" download>下载脚本文件</a>
+  <a class="raw" href="read-frog-lite-via-v1.4.0.user.js">或长按复制此直链 → read-frog-lite-via-v1.4.0.user.js</a>
+  <a class="raw" href="read-frog-lite-via-v1.4.0.txt">纯文本版（.txt）→ read-frog-lite-via-v1.4.0.txt</a>
   <div class="steps">
     <h2>Via 安装步骤</h2>
     <ol>
@@ -48,7 +48,7 @@
       <li>启用脚本，刷新网页即可看到青蛙悬浮球</li>
     </ol>
   </div>
-  <div class="note">v1.3.9：多指按压语义统一为「原文 / 译文」二态循环——空闲按压开始翻译；翻译中或已译完按压一步完成「停止翻译 + 显示原文」，不再需要按第二次；停在原文时再按压立即回渲染已有译文（不重新请求）并继续翻译剩余段落。原文视图期间中止在途请求、暂停页面观察器，翻译记录与本地缓存全部保留，来回切换不重复计费；悬浮球「翻译」按钮复用同一套语义，按钮文案随视图变为「显示原文 / 显示译文 / 翻译」；原文视图下切换显示模式只保存偏好不立即重渲染，菜单「恢复原文」仍是彻底还原。手势识别策略不变：多指长按 320ms 触发，300ms 内先后落齐即可，系统吞掉触摸序列不再导致按住无反应，圆形 slop 容差让斜向抖动不误杀，触发后 1.5 秒去抖。本定制版由 ifei 维护，基于上游 Read Frog，GPL-3.0 开源。</div>
+  <div class="note">v1.4.0：新增三条<strong>无需 API Key</strong> 的免费翻译通道——有道、MyMemory 与 Google（gtx 免 key 端点），设置里选中即用，不必再准备任何 Key；新增「自动」模式，按 Edge → 有道 → MyMemory 依次降级，前一通道超长、限流或网络失败时自动切到下一条，全部失败才报错并列出各通道原因。Google 在中国大陆无法直连，因此只作为手动选项、不进入降级链，避免每次降级都多等一轮超时；在网络可达时仍可单独选用。有道按 900 字符分批、返回段数不一致时自动逐条重发；MyMemory 按 500 字符切片并识别「HTTP 200 + 内容超长」的伪成功响应，不会把英文错误提示当译文显示。同时修复上一版遗留：轻点悬浮球改为与多指按压一致的原文/译文切换语义。本定制版由 ifei 维护，基于上游 Read Frog，GPL-3.0 开源。</div>
 </div>
 </body>
 </html>

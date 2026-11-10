@@ -2,6 +2,20 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 记录发布变更。
 
+## v1.4.0
+
+- 新增三条**无需 API Key** 的免费翻译通道：有道（`aidemo.youdao.com`）、MyMemory、Google（`translate_a/single` gtx 免 key 端点）
+- 新增「自动」模式：按 **Edge → 有道 → MyMemory** 依次降级，任一通道成功即返回；全部失败才报错，并在错误信息里附各通道原因
+- Google 在中国大陆无法直连，因此只作为手动选项，不进入自动降级链，避免每次降级都多等一轮超时
+- 请求层支持 `GET` 与 `application/x-www-form-urlencoded`：`requestWithRetry` 新增可选的 `method` 参数，缺省仍为 POST，既有调用零改动
+- 有道通道按 900 字符预算分批（服务端上限 1000），组内用 `\n` 拼接；返回段数与输入不一致时整组降级为逐条请求，避免译文错位
+- MyMemory 通道按 500 字符切片、逐条串行并留 120ms 间隔；同时拦截「HTTP 200 + `responseStatus:403` + `QUERY LENGTH LIMIT EXCEEDED`」这种伪成功响应，不会再把英文错误提示当译文渲染
+- 有道 `errorCode` 兼容字符串 `"0"` 与数字 `0` 两种返回；`411` 明确提示超长或限流
+- Edge 通道加固：空批次直接返回（不再触发 400），目标语言统一为 `zh-Hans`
+- 免 key 通道统一登记在 `FREE_SERVICES`：`validateConfig` 跳过 Key/模型/地址校验，设置面板自动隐藏 Key 字段
+- 修复 v1.3.9 遗留：轻点悬浮球改为与多指按压一致的三态语义（原文视图 → 译文；翻译中/已译完 → 原文；空闲 → 开始翻译）
+- 新增 `tests/test-free-providers.cjs`（49 项断言，全桩不联网）；`test-persist` 补 5 项 service 白名单断言、`test-view-toggle` 补 7 项轻点语义断言
+
 ## v1.3.9
 
 - 多指按压语义统一为「原文 / 译文」二态循环：空闲按压开始翻译；翻译中或已译完按压**一步完成**「停止翻译 + 显示原文」，不再需要按第二次

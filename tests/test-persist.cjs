@@ -79,5 +79,12 @@ check("重载后 gestureFingers 恢复为 2", ctx6.config.gestureFingers, 2);
 check("非法值 8 归一化回退为 4", ctx6.normalizeConfig({ gestureFingers: 8 }).gestureFingers, 4);
 check("旧配置（无 gestureFingers）迁移后为 4", ctx6.normalizeConfig({ mode: "translation" }).gestureFingers, 4);
 
+// ── v1.4.0 免费通道：service 白名单接受新值，非法值回退默认 ──
+check("service=youdao 被接受", ctx6.normalizeConfig({ service: "youdao" }).service, "youdao");
+check("service=mymemory 被接受", ctx6.normalizeConfig({ service: "mymemory" }).service, "mymemory");
+check("service=google 被接受", ctx6.normalizeConfig({ service: "google" }).service, "google");
+check("service=auto 被接受", ctx6.normalizeConfig({ service: "auto" }).service, "auto");
+check("非法 service 回退为 microsoft", ctx6.normalizeConfig({ service: "baidu" }).service, "microsoft");
+
 console.log("\n结果：" + pass + " 通过 / " + fail + " 失败");
 process.exit(fail ? 1 : 0);

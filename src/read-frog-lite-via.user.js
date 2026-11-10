@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Read Frog Lite for Via
 // @namespace    https://github.com/iFei7/read-frog-lite-via
-// @version      1.3.9
+// @version      1.4.0
 // @description  为 Via 优化的移动端网页翻译：渐进式翻译、原文切换、自动翻译与多服务支持
 // @author       ifei
 // @license      GPL-3.0-only
@@ -29,6 +29,13 @@
  * https://github.com/iFei7/read-frog-lite-via
  *
  * Licensed under GNU GPL v3.0.
+ *
+ * Local modifications (v1.4.0):
+ * - 新增三条无需 API Key 的免费翻译通道：有道（aidemo）、MyMemory、Google（gtx 免 key 端点）；
+ *   设置面板可直接选用，免 key 通道统一跳过 Key/模型/接口地址校验
+ * - 新增「自动」模式：按 Edge → 有道 → MyMemory 依次降级，任一通道成功即返回，全部失败才报错；
+ *   Google 在中国大陆不可直连，故不进入自动降级链，仅在可访问 Google 的网络下手动选用
+ * - 请求层支持 GET 与表单编码，保持既有 POST 调用不变
  *
  * Local modifications (v1.3.9):
  * - 多指按压语义统一为「原文/译文」二态循环：空闲按压开始翻译；翻译中或已译完按压
@@ -174,7 +181,7 @@
   // 配置与持久化状态
   // ---------------------------------------------------------------------------
 
-  var VERSION = "1.3.9";
+  var VERSION = "1.4.0";
   var CONFIG_KEY = "read_frog_via_config_v2";
   var OLD_CONFIG_KEY = "read_frog_via_config_v1";
   var TRANSLATION_CACHE_KEY = "read_frog_via_translation_cache_v1";
@@ -212,6 +219,14 @@
     gestureFingers: 4,
     autoTranslateHosts: []
   };
+
+  // 免 key 通道集合：这些服务不需要 API Key/模型/接口地址，
+  // 校验时直接放行，设置面板也要隐藏 Key 相关字段。
+  // auto 只是本地降级链，本身同样不需要任何配置。
+  var FREE_SERVICES = { microsoft:1, youdao:1, mymemory:1, google:1, auto:1 };
+
+  // 服务白名单（顺序与设置面板的推荐顺序一致）。
+  var SERVICE_CHOICES = ["microsoft", "youdao", "mymemory", "google", "auto", "deepseek", "openai", "custom"];
 
   var LANGUAGES = [
     ["zh-Hans", "简体中文"], ["zh-Hant", "繁體中文"], ["en", "English"],
@@ -281,7 +296,7 @@
     var source = value && typeof value === "object" ? value : {};
     return {
       schemaVersion: 2,
-      service: isOneOf(source.service, ["microsoft", "deepseek", "openai", "custom"], DEFAULT_CONFIG.service),
+      service: isOneOf(source.service, SERVICE_CHOICES, DEFAULT_CONFIG.service),
       endpoint: String(source.endpoint || DEFAULT_CONFIG.endpoint),
       apiKey: String(source.apiKey || ""),
       model: String(source.model || DEFAULT_CONFIG.model),
@@ -313,7 +328,8 @@
     var old = gmGet(OLD_CONFIG_KEY, null);
     if (!old || typeof old !== "object") return normalizeConfig(DEFAULT_CONFIG);
     var endpoint = String(old.endpoint || DEFAULT_CONFIG.endpoint);
-    var service = old.provider === "microsoft" ? "microsoft" : "custom";
+    // 旧配置按 provider 或 endpoint 推断服务；v1.4.0 起免费通道也接受 provider 直写。
+    var service = FREE_SERVICES[old.provider] ? old.provider : old.provider === "microsoft" ? "microsoft" : "custom";
     if (/api\.deepseek\.com/i.test(endpoint)) service = "deepseek";
     else if (/api\.openai\.com/i.test(endpoint)) service = "openai";
     return normalizeConfig(Object.assign({}, DEFAULT_CONFIG, {
@@ -516,11 +532,11 @@
           <label for="gesture-fingers">多指按压手势指数</label><select id="gesture-fingers"><option value="2">双指（2 指）</option><option value="3">三指（3 指）</option><option value="4">四指（4 指）</option></select>
         </div>
         <div class="section"><div class="section-title">翻译服务</div>
-          <label for="service">服务</label><select id="service"><option value="microsoft">Microsoft 免费翻译</option><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="custom">自定义兼容接口</option></select>
+          <label for="service">服务</label><select id="service"><option value="microsoft">Microsoft 免费翻译（推荐）</option><option value="auto">自动（免费通道依次降级）</option><option value="youdao">有道免费翻译</option><option value="mymemory">MyMemory 免费翻译</option><option value="google">Google 免费翻译（需可访问 Google）</option><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="custom">自定义兼容接口</option></select>
           <div id="ai-fields"><label for="api-key">API Key</label><div class="key-row"><input id="api-key" type="password" autocomplete="off" placeholder="输入 API Key"><button id="key-toggle" type="button" title="显示或隐藏" aria-label="显示 API Key">${UI_ICONS.eye}</button><button id="key-clear" type="button" title="清空" aria-label="清空 API Key">${UI_ICONS.clear}</button></div>
             <label for="model">模型</label><input id="model" list="model-list" placeholder="模型名称"><datalist id="model-list"></datalist>
             <div id="custom-endpoint-wrap"><label for="endpoint">兼容接口地址</label><input id="endpoint" inputmode="url" placeholder="https://.../v1"></div><div class="preview">实际请求：<span id="endpoint-preview"></span></div>
-          </div><div class="hint">Microsoft 无需 Key。API Key 只保存在 Via 脚本存储中；网页正文会发送到所选翻译服务。</div>
+          </div><div class="hint">Microsoft / 有道 / MyMemory / Google 为免 Key 通道；「自动」按 Edge → 有道 → MyMemory 顺序降级。API Key 只保存在 Via 脚本存储中；网页正文会发送到所选翻译服务。</div>
         </div>
         <div class="section"><div class="section-title">性能</div><div class="grid"><div><label for="batch">每批段落</label><input id="batch" type="number" min="1" max="10"></div><div><label for="concurrency">并发请求</label><input id="concurrency" type="number" min="1" max="4"></div></div></div>
         <div class="settings-actions"><button id="save" class="save">保存设置</button><button id="test" class="test">测试服务</button></div><div id="settings-status"></div>
@@ -624,7 +640,7 @@
 
   function updateServiceFields(resetModel) {
     var service = $("service").value;
-    $("ai-fields").style.display = service === "microsoft" ? "none" : "block";
+    $("ai-fields").style.display = FREE_SERVICES[service] ? "none" : "block";
     $("custom-endpoint-wrap").style.display = service === "custom" ? "block" : "none";
     var models = service === "deepseek" ? ["deepseek-v4-flash","deepseek-v4-pro"] : service === "openai" ? ["gpt-4o-mini","gpt-4.1-mini"] : [];
     $("model-list").innerHTML = models.map(function (m) { return "<option value='" + m + "'>"; }).join("");
@@ -634,7 +650,11 @@
 
   function updateEndpointPreview() {
     var draft = readForm();
-    try { $("endpoint-preview").textContent = draft.service === "microsoft" ? "无需配置" : resolvedEndpoint(draft); }
+    if (FREE_SERVICES[draft.service]) {
+      $("endpoint-preview").textContent = draft.service === "auto" ? "Edge → 有道 → MyMemory（失败自动降级）" : "无需配置";
+      return;
+    }
+    try { $("endpoint-preview").textContent = resolvedEndpoint(draft); }
     catch (_) { $("endpoint-preview").textContent = "地址格式不正确"; }
   }
 
@@ -691,7 +711,8 @@
 
   function validateConfig(cfg) {
     if (!cfg.targetLanguage) throw new Error("请选择或填写目标语言");
-    if (cfg.service === "microsoft") return;
+    // 免 key 通道（含自动降级链）无需 Key、模型与接口地址。
+    if (FREE_SERVICES[cfg.service]) return;
     if (!cfg.apiKey) throw new Error("请填写 API Key");
     if (!cfg.model) throw new Error("请填写模型名称");
     var endpoint;
@@ -735,7 +756,10 @@
     return null;
   }
 
-  function requestRaw(url, headers, body, jobId) {
+  // method 缺省为 POST：既有调用不需要改动；GET 通道（MyMemory / Google）传 "GET"，
+  // 此时 body 传 null，fetch 分支不能带 request body。
+  function requestRaw(url, headers, body, jobId, method) {
+    var httpMethod = method || "POST";
     var handle = null;
     var settled = false;
     var timeoutTimer = 0;
@@ -755,7 +779,7 @@
       if (typeof GM_xmlhttpRequest === "function") {
         try {
           handle = GM_xmlhttpRequest({
-            method:"POST", url:url, headers:headers, data:body, timeout:REQUEST_TIMEOUT,
+            method:httpMethod, url:url, headers:headers, data:body, timeout:REQUEST_TIMEOUT,
             onload:function (r) { done(r.status, r.responseText, headerValue(r.responseHeaders, "retry-after")); },
             onerror:function (r) {
               if (Number(r && r.status) > 0) return done(r.status, r.responseText, headerValue(r.responseHeaders, "retry-after"));
@@ -775,7 +799,7 @@
           finish(reject, requestError("请求超时，请稍后重试或降低并发数", "timeout"));
           if (controller) controller.abort();
         }, REQUEST_TIMEOUT);
-        fetch(url, { method:"POST", headers:headers, body:body, signal:controller ? controller.signal : undefined })
+        fetch(url, { method:httpMethod, headers:headers, body:httpMethod === "GET" ? null : body, signal:controller ? controller.signal : undefined })
           .then(function (r) {
             var retryAfter = null;
             try { retryAfter = r.headers && r.headers.get ? r.headers.get("retry-after") : null; } catch (_) {}
@@ -810,11 +834,11 @@
   function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
 
   // 网络类错误做指数退避 + 抖动重试；有 Retry-After 时优先尊重它。绝不无限重试。
-  async function requestWithRetry(url, headers, body, jobId) {
+  async function requestWithRetry(url, headers, body, jobId, method) {
     var attempt = 0;
     for (;;) {
       try {
-        return await requestRaw(url, headers, body, jobId);
+        return await requestRaw(url, headers, body, jobId, method);
       } catch (error) {
         if (jobId != null && jobId !== app.jobId) throw error;
         var retriable = error && (error.kind === "timeout" || error.kind === "network" ||
@@ -834,7 +858,10 @@
   function decodeHtml(text) { var area = document.createElement("textarea"); area.innerHTML = text; return area.value; }
 
   async function microsoftTranslate(texts, cfg, jobId) {
+    // Edge 的批量接口不接受空数组（会 400），空批次直接返回。
+    if (!texts.length) return [];
     var to = normalizeLanguage(cfg.targetLanguage);
+    if (to === "zh-CN") to = "zh-Hans";
     if (!/^[a-z]{2,3}(?:-[a-z]{2,4})?$/i.test(to)) throw new Error("Microsoft 无法识别目标语言，请使用语言代码");
     var url = "https://edge.microsoft.com/translate/translatetext?from=&to=" + encodeURIComponent(to) + "&isEnterpriseClient=false";
     var raw = await requestWithRetry(url, { "Content-Type":"application/json" }, JSON.stringify(texts.map(escapeHtml)), jobId);
@@ -847,6 +874,216 @@
       return decodeHtml(value);
     });
   }
+
+  // === 免费通道 BEGIN ===
+  // 无需 API Key 的翻译通道：有道（aidemo）、MyMemory、Google（gtx 免 key 端点）。
+  // 本区块只依赖 requestWithRetry / sleep / requestError / decodeHtml / normalizeLanguage，
+  // tests/test-free-providers.cjs 会按上下标记整体截取后用桩函数注入执行。
+
+  var FREE_SENTENCE_END = ".!?。！？";
+
+  // 按字符预算切分超长文本：优先在句子边界断开，找不到标点时硬切。
+  function splitFreeText(text, budget) {
+    var value = String(text == null ? "" : text);
+    if (value.length <= budget) return [value];
+    var parts = [], rest = value;
+    while (rest.length > budget) {
+      var window = rest.slice(0, budget);
+      var cut = -1;
+      for (var i = window.length - 1; i >= Math.floor(budget * 0.6); i--) {
+        if (FREE_SENTENCE_END.indexOf(window.charAt(i)) >= 0) { cut = i + 1; break; }
+      }
+      if (cut <= 0) cut = budget;
+      parts.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    if (rest) parts.push(rest);
+    return parts;
+  }
+
+  var YOUDAO_URL = "https://aidemo.youdao.com/trans";
+  var YOUDAO_CHUNK_BUDGET = 900;   // 服务端单请求上限 1000 字符，留 100 字符余量
+
+  // 有道用的是 zh-CHS / zh-CHT，与内部的 zh-Hans / zh-Hant 不是同一套写法。
+  function youdaoTargetLang(code) {
+    var value = normalizeLanguage(code);
+    if (/^zh-(hans|cn|sg)$/i.test(value)) return "zh-CHS";
+    if (/^zh-(hant|tw|hk)$/i.test(value)) return "zh-CHT";
+    return String(value).split("-")[0].toLowerCase();
+  }
+
+  async function youdaoRequest(joined, to, jobId) {
+    var body = "q=" + encodeURIComponent(joined) + "&from=auto&to=" + encodeURIComponent(to);
+    var raw = await requestWithRetry(YOUDAO_URL, { "Content-Type":"application/x-www-form-urlencoded" }, body, jobId);
+    var json;
+    try { json = JSON.parse(raw); } catch (_) { throw requestError("有道返回了无法解析的数据", "format"); }
+    // errorCode 有时是字符串 "0"，有时是数字 0，统一转成字符串比较。
+    var code = json && json.errorCode;
+    if (String(code) !== "0") throw requestError("有道返回错误码 " + code + "（超长或限流）", "format");
+    var translation = json && json.translation;
+    if (!Array.isArray(translation) || typeof translation[0] !== "string") throw requestError("有道响应缺少译文", "format");
+    return translation[0];
+  }
+
+  async function youdaoTranslateLong(text, to, jobId) {
+    // 单条超预算时按句子边界切片，逐片请求后原样拼接；
+    // 无标点可切时 splitFreeText 会硬切，保证每次请求都不越过服务端上限。
+    var parts = splitFreeText(text, YOUDAO_CHUNK_BUDGET);
+    var output = "";
+    for (var i = 0; i < parts.length; i++) output += await youdaoRequest(parts[i], to, jobId);
+    return output;
+  }
+
+  async function youdaoTranslate(texts, cfg, jobId) {
+    var to = youdaoTargetLang(cfg.targetLanguage);
+    var results = new Array(texts.length);
+    var groups = [], current = [], currentChars = 0;
+
+    // 先把低预算的段落按 900 字符拼组（组内用 "\n" 连接），超长段落单独成组。
+    texts.forEach(function (text, index) {
+      var value = String(text == null ? "" : text);
+      if (value.length > YOUDAO_CHUNK_BUDGET) { groups.push({ index:index, single:value }); return; }
+      var extra = current.length ? 1 : 0;   // 分隔符本身也占 1 个字符
+      if (current.length && currentChars + extra + value.length > YOUDAO_CHUNK_BUDGET) {
+        groups.push({ items:current });
+        current = []; currentChars = 0;
+      }
+      currentChars += (current.length ? 1 : 0) + value.length;
+      current.push({ index:index, text:value });
+    });
+    if (current.length) groups.push({ items:current });
+
+    for (var g = 0; g < groups.length; g++) {
+      var group = groups[g];
+      if (group.single != null) {
+        results[group.index] = await youdaoTranslateLong(group.single, to, jobId);
+        continue;
+      }
+      var joined = group.items.map(function (item) { return item.text; }).join("\n");
+      var translated = await youdaoRequest(joined, to, jobId);
+      var parts = translated.split("\n");
+      if (parts.length === group.items.length) {
+        group.items.forEach(function (item, i) { results[item.index] = parts[i]; });
+      } else {
+        // 段数对不上说明换行被合并/拆分，整组退回逐条请求，保证与原文一一对应。
+        for (var i = 0; i < group.items.length; i++) {
+          results[group.items[i].index] = await youdaoRequest(group.items[i].text, to, jobId);
+        }
+      }
+    }
+    return results;
+  }
+
+  var MYMEMORY_URL = "https://api.mymemory.translated.net/get";
+  var MYMEMORY_CHUNK_BUDGET = 500;   // 接口硬限 500 字符
+  // 没有源语言配置项，交给服务端自动判断；MyMemory 的 "Autodetect" 比 "auto" 更稳。
+  var MYMEMORY_SOURCE = "Autodetect";
+
+  function myMemoryTargetLang(code) {
+    var value = normalizeLanguage(code);
+    if (/^zh-hans$/i.test(value)) return "zh-CN";
+    if (/^zh-hant$/i.test(value)) return "zh-TW";
+    return value;
+  }
+
+  async function myMemoryRequest(text, cfg, jobId) {
+    var langpair = MYMEMORY_SOURCE + "|" + myMemoryTargetLang(cfg.targetLanguage);
+    var url = MYMEMORY_URL + "?q=" + encodeURIComponent(text) + "&langpair=" + encodeURIComponent(langpair);
+    var raw = await requestWithRetry(url, { "Content-Type":"application/json" }, null, jobId, "GET");
+    var json;
+    try { json = JSON.parse(raw); } catch (_) { throw requestError("MyMemory 返回了无法解析的数据", "format"); }
+    if (json && json.quotaFinished === true) throw requestError("MyMemory 今日免费额度已用完", "quota");
+    var status = json && json.responseStatus;
+    var value = json && json.responseData && json.responseData.translatedText;
+    // 超长时限流时 HTTP 仍是 200，但 responseStatus 是 "403"、translatedText 是
+    // "QUERY LENGTH LIMIT EXCEEDED..."，必须拦下，否则会把英文错误提示当译文渲染。
+    if (String(status) !== "200" || typeof value !== "string" || /LIMIT EXCEEDED/i.test(value)) {
+      throw requestError("MyMemory 返回异常（超出长度限制或限流）", "format");
+    }
+    return decodeHtml(value);
+  }
+
+  async function myMemoryTranslate(texts, cfg, jobId) {
+    var results = new Array(texts.length);
+    for (var i = 0; i < texts.length; i++) {
+      var parts = splitFreeText(texts[i], MYMEMORY_CHUNK_BUDGET);
+      var output = "";
+      for (var j = 0; j < parts.length; j++) output += await myMemoryRequest(parts[j], cfg, jobId);
+      results[i] = output;
+      // 串行请求并留出间隔，避免免费额度被并发打满。
+      if (i < texts.length - 1) await sleep(120);
+    }
+    return results;
+  }
+
+  var GOOGLE_URL = "https://translate.googleapis.com/translate_a/single";
+  var GOOGLE_BATCH = 3;
+  var GOOGLE_BATCH_GAP = 150;
+
+  function googleTargetLang(code) {
+    var value = normalizeLanguage(code);
+    if (/^zh-hans$/i.test(value)) return "zh-CN";
+    if (/^zh-hant$/i.test(value)) return "zh-TW";
+    return value;
+  }
+
+  // Google 在中国大陆不可直连（实测 HTTP 000），此通道仅在可访问 Google 的网络下可用，
+  // 因此只作为手动选项，不进入「自动」降级链。
+  async function googleRequest(text, cfg, jobId) {
+    var url = GOOGLE_URL + "?client=gtx&dt=t&dj=1&ie=UTF-8&sl=auto&tl=" +
+      encodeURIComponent(googleTargetLang(cfg.targetLanguage)) + "&q=" + encodeURIComponent(text);
+    var raw = await requestWithRetry(url, { "Content-Type":"application/json" }, null, jobId, "GET");
+    var json;
+    try { json = JSON.parse(raw); } catch (_) { throw requestError("Google 返回了无法解析的数据", "format"); }
+    // dj=1 时返回 {"sentences":[{"trans":"…"}],"src":"en"}，多句要按顺序拼回整段。
+    var sentences = json && json.sentences;
+    if (!Array.isArray(sentences) || !sentences.length) throw requestError("Google 响应缺少译文", "format");
+    var value = sentences.map(function (item) { return item && item.trans ? item.trans : ""; }).join("");
+    if (!value) throw requestError("Google 响应缺少译文", "format");
+    return value;
+  }
+
+  async function googleTranslate(texts, cfg, jobId) {
+    // 该接口没有稳定的批量能力，只能逐条 GET；3 条一批并发，兼顾速度与限流风险。
+    var results = new Array(texts.length);
+    for (var start = 0; start < texts.length; start += GOOGLE_BATCH) {
+      var end = Math.min(start + GOOGLE_BATCH, texts.length);
+      var jobs = [];
+      for (var index = start; index < end; index++) {
+        (function (slot) {
+          jobs.push(googleRequest(String(texts[slot] == null ? "" : texts[slot]), cfg, jobId).then(function (value) {
+            results[slot] = value;
+          }));
+        })(index);
+      }
+      await Promise.all(jobs);
+      if (end < texts.length) await sleep(GOOGLE_BATCH_GAP);
+    }
+    return results;
+  }
+
+  // 「自动」模式的降级链：Edge → 有道 → MyMemory。
+  // 不放 Google：大陆不可达，放进来只会让每次降级都多等一轮超时。
+  async function freeServiceFallback(texts, cfg, jobId) {
+    var chain = [
+      { name:"Edge", run:microsoftTranslate },
+      { name:"有道", run:youdaoTranslate },
+      { name:"MyMemory", run:myMemoryTranslate }
+    ];
+    var failures = [], lastError = null;
+    for (var i = 0; i < chain.length; i++) {
+      try {
+        return await chain[i].run(texts, cfg, jobId);
+      } catch (error) {
+        lastError = error;
+        failures.push(chain[i].name + "：" + (error && error.message ? error.message : String(error)));
+      }
+    }
+    var summary = requestError("所有免费通道均失败：" + failures.join("；"), lastError && lastError.kind || "network");
+    summary.cause = lastError;
+    throw summary;
+  }
+  // === 免费通道 END ===
 
   function translationMessages(texts, cfg) {
     var target = languageLabel(cfg.targetLanguage);
@@ -1082,7 +1319,12 @@
       parts.forEach(function (part) { flat.push(part.core); });
     });
     var providerCall = function (list) {
+      // 免费通道与自动降级链各自处理批量/切片，不再走 AI 的单条重试逻辑。
+      if (cfg.service === "auto") return freeServiceFallback(list, cfg, jobId);
       if (cfg.service === "microsoft") return microsoftTranslate(list, cfg, jobId);
+      if (cfg.service === "youdao") return youdaoTranslate(list, cfg, jobId);
+      if (cfg.service === "mymemory") return myMemoryTranslate(list, cfg, jobId);
+      if (cfg.service === "google") return googleTranslate(list, cfg, jobId);
       return aiTranslate(list, cfg, jobId).catch(function (error) {
         if (error.kind !== "format" || list.length === 1) throw error;
         return retryAiIndividually(list, cfg, jobId);
@@ -2629,7 +2871,10 @@
       tuckFrog(1400);
     } else {
       if (wasTucked) untuckFrog(true);
-      else if (isBusyPhase()) stopTranslation();
+      // 轻点与多指按压保持一致的三态语义：原文视图优先回到译文，
+      // 翻译中/已译完一步切到原文，空闲时才启动翻译。
+      else if (app.originalView) showTranslatedView();
+      else if (isBusyPhase() || app.active) enterOriginalView();
       else startTranslation();
     }
   }

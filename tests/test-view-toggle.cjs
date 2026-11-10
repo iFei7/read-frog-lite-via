@@ -153,6 +153,74 @@ check("restorePage 后 originalView 置为 false", h6.app.originalView, false);
 check("restorePage 后 phase 回到 idle", h6.app.phase, "idle");
 check("restorePage 后 records 清空", h6.app.records.size, 0);
 
+/* ---------------------------------- 7) dragEnd 轻点语义（v1.4.0 遗留修复） */
+
+// 轻点悬浮球与多指按压共用同一套三态语义：原文视图 → 译文；翻译中/已译完 → 原文；空闲 → 开始翻译。
+const DRAG_START = source.indexOf("  function dragEnd(event) {");
+const DRAG_END = source.indexOf('  frog.addEventListener("touchstart"', DRAG_START);
+if (DRAG_START < 0 || DRAG_END < DRAG_START) {
+  console.error("定位失败：未找到 dragEnd");
+  process.exit(2);
+}
+const dragBlock = source.slice(DRAG_START, DRAG_END);
+
+function createDragHarness(state) {
+  const log = { started: 0, stopped: 0, translatedView: 0, originalView: 0 };
+  const frogDock = { style: {}, classList: { remove: function () {}, toggle: function () {} } };
+  const frog = {
+    style: {},
+    classList: { contains: function () { return false; }, remove: function () {} },
+    getBoundingClientRect: function () { return { left: 100, top: 100, width: 50, height: 50 }; }
+  };
+  const app = { originalView: !!state.originalView, active: !!state.active };
+  const factory = new Function(
+    "busy", "drag", "frogDock", "frog", "app",
+    "saveConfig", "positionFrog", "tuckFrog", "untuckFrog",
+    "stopTranslation", "startTranslation", "showTranslatedView", "enterOriginalView",
+    "function isBusyPhase() { return !!busy; }\n" +
+    "var longPressTimer = 0;\n" +
+    dragBlock + "\nreturn dragEnd;\n"
+  );
+  const end = factory(
+    !!state.busy,
+    { moved: false, wasTucked: false, longPressed: false },
+    frogDock, frog, app,
+    function () {}, function () {}, function () {}, function () {},
+    function () { log.stopped++; },
+    function () { log.started++; },
+    function () { log.translatedView++; },
+    function () { log.originalView++; }
+  );
+  return { end: end, log: log, app: app };
+}
+
+// 7a) 原文视图轻点 → 直接显示译文（不重新请求）
+const d7a = createDragHarness({ originalView: true });
+d7a.end({});
+check("轻点：原文视图 → showTranslatedView", d7a.log.translatedView, 1);
+check("轻点：原文视图不启动翻译", d7a.log.started, 0);
+
+// 7b) 翻译中轻点 → 一步切到原文（与按压语义一致）
+const d7b = createDragHarness({ busy: true });
+d7b.end({});
+check("轻点：翻译中 → enterOriginalView", d7b.log.originalView, 1);
+check("轻点：翻译中不再调用 stopTranslation", d7b.log.stopped, 0);
+
+// 7c) 已译完（active 且非 busy）轻点 → 切到原文
+const d7c = createDragHarness({ active: true });
+d7c.end({});
+check("轻点：已译完 → enterOriginalView", d7c.log.originalView, 1);
+
+// 7d) 空闲轻点 → 开始翻译
+const d7d = createDragHarness({});
+d7d.end({});
+check("轻点：空闲 → startTranslation", d7d.log.started, 1);
+
+// 7e) 异常态（originalView 与 busy 同时为真）→ 仍优先显示译文
+const d7e = createDragHarness({ originalView: true, busy: true });
+d7e.end({});
+check("轻点：原文档位优先于 busy", d7e.log.translatedView, 1);
+
 /* -------------------------------------------------------------------- 输出 */
 
 console.log("");
