@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Read Frog Lite for Via
-// @namespace    https://github.com/ShiZi-OuO/read-frog-lite-via
-// @version      1.2.1
+// @namespace    https://github.com/iFei7/read-frog-lite-via
+// @version      1.3.8
 // @description  为 Via 优化的移动端网页翻译：渐进式翻译、原文切换、自动翻译与多服务支持
-// @author       Read Frog contributors; Modified for Via Browser by shizi
+// @author       ifei
 // @license      GPL-3.0-only
 // @match        http://*/*
 // @match        https://*/*
@@ -25,7 +25,34 @@
  * Modified for Via Browser.
  * This is not an official Read Frog release.
  *
+ * Custom repo:
+ * https://github.com/iFei7/read-frog-lite-via
+ *
  * Licensed under GNU GPL v3.0.
+ *
+ * Local modifications (v1.3.8):
+ * - 元信息归属定制版：@namespace / @author 指向 iFei7/read-frog-lite-via（ifei），
+ *   上游 Read Frog 出处与 GPL-3.0 声明保留
+ *
+ * Local modifications (v1.3.7):
+ * - 手势档位可配置：设置面板新增「双指/三指/四指」选择，默认四指；阈值在运行时读取配置，
+ *   修改后无需刷新页面即可生效，其余识别策略（320ms 触发、300ms 落指窗、60ms settle、
+ *   圆形 slop、touchcancel 容错、1.5s 去抖）保持不变
+ *
+ * Local modifications (v1.3.6):
+ * - 基于 v1.3.3：回退 v1.3.4/v1.3.5 的改动（性能微调与评论区散文翻译均不再包含）
+ * - 四指按压改为行业主流多指长按方案：320ms 触发；4 指允许 300ms 滑动窗内先后落齐；
+ *   60ms settle 期忽略落屏坐标跳变；圆形 slop 半径随触点接触面积缩放（clamp 10-18px），
+ *   斜向小抖动不误杀；安卓系统吞掉触摸序列（touchcancel）但手指仍在屏上时照常触发；
+ *   触发后 1.5 秒去抖保留。全部监听器 passive 且不调用 preventDefault
+ *
+ * Local modifications (v1.3.3):
+ * - 性能：全页扫描去 innerText 强制布局、可编辑区判定 WeakMap 缓存、
+ *   正文遍历两阶段化（先读后写）、排序优先级预计算、清理上游死代码
+ * - 视口优先翻译（v1.3.3）：首轮扫描跳过完全处于扩展视口外的深层子树（只记账不遍历），
+ *   让视口内正文尽快开始翻译；首轮结束后由分轮机制自动补扫剪枝区域，整页最终全部翻译
+ * - 悬浮球可在设置中开关；四指长按屏幕在翻译结果与原文间切换
+ * - 关闭设置面板：点 ✕ 丢弃草稿，点蒙层自动保存（配置无效不保存不阻塞）
  */
 
 (function () {
@@ -140,7 +167,7 @@
   // 配置与持久化状态
   // ---------------------------------------------------------------------------
 
-  var VERSION = "1.2.1";
+  var VERSION = "1.3.8";
   var CONFIG_KEY = "read_frog_via_config_v2";
   var OLD_CONFIG_KEY = "read_frog_via_config_v1";
   var TRANSLATION_CACHE_KEY = "read_frog_via_translation_cache_v1";
@@ -174,6 +201,8 @@
     concurrency: 2,
     buttonSide: "right",
     buttonY: 0.72,
+    showDock: true,
+    gestureFingers: 4,
     autoTranslateHosts: []
   };
 
@@ -257,6 +286,9 @@
       concurrency: clamp(source.concurrency == null ? DEFAULT_CONFIG.concurrency : source.concurrency, 1, 4),
       buttonSide: isOneOf(source.buttonSide, ["left", "right"], DEFAULT_CONFIG.buttonSide),
       buttonY: clamp(source.buttonY == null ? DEFAULT_CONFIG.buttonY : source.buttonY, .12, .84),
+      showDock: source.showDock !== false,
+      // 只接受整数 2/3/4：缺失、NaN、越界值一律回退默认四指（4.6 先四舍五入到 5 再 clamp 回 4）。
+      gestureFingers: clamp(Math.round(Number(source.gestureFingers) || DEFAULT_CONFIG.gestureFingers), 2, 4),
       autoTranslateHosts: normalizeHostList(source.autoTranslateHosts)
     };
   }
@@ -328,6 +360,10 @@
   };
   var cacheWriteTimer = 0;
   var pendingStart = false;
+  // 视口优先翻译（v1.3.3）：首轮扫描时"整体位于扩展视口外"的块级子树根记在这里，
+  // 只记账不遍历，让视口内正文尽快进入翻译队列；补扫由 processNewRecords 的
+  // deferredRoots 分支在主流程收尾时整批消费。剪枝区域从未包装，恢复原文无需处理。
+  var deferredRoots = [];
 
   function pruneTranslationCache() {
     function characterCount() {
@@ -450,6 +486,10 @@
       #settings{position:fixed;z-index:2147483647;left:8px;right:8px;bottom:0;max-height:min(88vh,760px);overflow:auto;overscroll-behavior:contain;background:var(--surface);border:1px solid rgba(255,255,255,.7);border-radius:32px 32px 0 0;padding:10px 14px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -20px 60px rgba(20,35,26,.22);transform:translateY(105%);transition:transform .38s cubic-bezier(.2,.8,.2,1)}#settings.open{transform:translateY(0)}
       .grab{width:34px;height:4px;border-radius:99px;background:var(--outline);margin:2px auto 12px}.head{display:flex;justify-content:space-between;align-items:center;min-height:72px;padding:4px 4px 8px 8px}.head-copy{min-width:0}.title{font-size:21px;font-weight:780;letter-spacing:-.025em}.sub{font-size:12px;color:var(--muted);margin-top:3px}.hero-art{position:relative;width:82px;height:58px;flex:0 0 82px;margin-left:auto;margin-right:8px;overflow:hidden;border-radius:22px;background:linear-gradient(155deg,var(--primary-container),var(--surface-high))}.hero-sun{position:absolute;width:17px;height:17px;border-radius:50%;right:12px;top:9px;background:#f3c982}.hero-hill{position:absolute;width:78px;height:42px;border-radius:50%;left:-18px;bottom:-23px;background:var(--leaf2);opacity:.6}.hero-pond{position:absolute;width:48px;height:19px;border-radius:50%;right:-8px;bottom:3px;background:rgba(115,169,183,.48)}.hero-frog{position:absolute;left:29px;bottom:10px;width:25px;height:21px;border-radius:48% 48% 44% 44%;background:var(--primary)}.hero-frog:before,.hero-frog:after{content:"";position:absolute;top:-5px;width:9px;height:9px;border-radius:50%;background:var(--primary)}.hero-frog:before{left:2px}.hero-frog:after{right:2px}.icon-btn{border:0;background:var(--surface-container);border-radius:50%;width:42px;height:42px;color:var(--ink);display:flex;align-items:center;justify-content:center}.icon-btn .rf-icon{width:21px;height:21px}
       .section{margin-top:12px;padding:16px;background:var(--surface-container);border-radius:26px}.section:first-of-type{margin-top:4px}.section-title{font-size:13px;font-weight:780;color:var(--primary);letter-spacing:.025em;margin-bottom:10px}label{display:block;font-size:12px;font-weight:680;color:var(--muted);margin:12px 2px 6px}input,select{width:100%;min-height:50px;border:1px solid transparent;border-radius:18px;background:var(--surface);color:var(--ink);padding:10px 14px;font-size:15px;outline:none;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}input:focus,select:focus{border-color:var(--primary);background:var(--surface);box-shadow:0 0 0 4px var(--focus-ring)}#custom-language{display:none;margin-top:7px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.site-auto{display:flex;align-items:center;gap:12px;margin:14px 0 0;padding:12px 14px;background:var(--surface);border-radius:20px;cursor:pointer}.site-auto-copy{flex:1;min-width:0}.site-auto-title{font-size:14px;font-weight:760;color:var(--ink)}.site-auto-host{margin-top:3px;font-size:11px;font-weight:560;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.site-auto input{position:absolute;opacity:0;width:1px;min-height:1px;padding:0}.site-auto-switch{position:relative;width:48px;height:28px;flex:0 0 48px;border-radius:999px;background:var(--outline);transition:background .2s ease}.site-auto-switch:after{content:"";position:absolute;left:4px;top:4px;width:20px;height:20px;border-radius:50%;background:var(--surface);box-shadow:0 2px 5px rgba(20,35,26,.22);transition:transform .24s cubic-bezier(.2,.8,.2,1),background .2s ease}.site-auto input:checked+.site-auto-switch{background:var(--primary)}.site-auto input:checked+.site-auto-switch:after{transform:translateX(20px);background:var(--on-primary)}.site-auto input:focus-visible+.site-auto-switch{box-shadow:0 0 0 4px var(--focus-ring)}.key-row{display:flex;gap:8px}.key-row input{flex:1;min-width:0}.key-row button{width:48px;flex:0 0 48px;border:0;border-radius:17px;background:var(--surface-high);color:var(--ink);display:flex;align-items:center;justify-content:center}.key-row button .rf-icon{width:19px;height:19px}.preview{font-size:11px;color:var(--muted);word-break:break-all;margin:8px 2px 0}.hint{font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px}.settings-actions{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;margin:14px 2px 2px}.settings-actions button{min-height:50px;border:0;border-radius:999px;font-weight:760;letter-spacing:.02em}.save{background:var(--primary);color:var(--on-primary);box-shadow:0 8px 20px rgba(28,68,44,.18)}.test{background:var(--primary-container);color:var(--on-primary-container)}#settings-status{font-size:12px;min-height:18px;margin:10px 4px 0;color:var(--muted)}
+      /* 四指手势反馈与悬浮球隐藏态。 */
+      #gesture-toast{position:fixed;left:50%;bottom:calc(56px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(10px);padding:9px 18px;border-radius:999px;background:rgba(24,48,33,.88);color:#fff;font-size:13px;font-weight:640;letter-spacing:.02em;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .32s cubic-bezier(.2,.8,.2,1)}
+      #gesture-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+      #frog-dock[data-hidden='1']{display:none!important}
       @media(prefers-color-scheme:dark){#frog-actions{background:rgba(29,34,30,.95);border-color:rgba(255,255,255,.08)}.action-icon{background:rgba(255,255,255,.1)}#settings{border-color:rgba(255,255,255,.08)}input,select{border-color:transparent}}
       @media(prefers-reduced-motion:reduce){*{transition:none!important}#frog-loader:after{animation:none!important}}
     </style>
@@ -462,6 +502,8 @@
           <label for="language">目标语言</label><select id="language">${languageOptions}</select><input id="custom-language" placeholder="语言名或代码，例如 nl">
           <div class="grid"><div><label for="mode">显示模式</label><select id="mode"><option value="bilingual">双语对照</option><option value="translation">直接替换原文</option></select></div><div><label for="translation-style">双语译文样式</label><select id="translation-style"><option value="annotation">细线标记</option><option value="minimal">无样式</option></select></div></div>
           <label class="site-auto" for="auto-site"><span class="site-auto-copy"><span class="site-auto-title">总是自动翻译此网站</span><span id="auto-site-host" class="site-auto-host"></span></span><input id="auto-site" type="checkbox"><span class="site-auto-switch" aria-hidden="true"></span></label>
+          <label class="site-auto" for="show-dock"><span class="site-auto-copy"><span class="site-auto-title">显示悬浮球</span><span class="site-auto-host">隐藏后可用多指按压屏幕切换翻译/原文，指数可在下方设置，或经 Via 菜单打开设置</span></span><input id="show-dock" type="checkbox"><span class="site-auto-switch" aria-hidden="true"></span></label>
+          <label for="gesture-fingers">多指按压手势指数</label><select id="gesture-fingers"><option value="2">双指（2 指）</option><option value="3">三指（3 指）</option><option value="4">四指（4 指）</option></select>
         </div>
         <div class="section"><div class="section-title">翻译服务</div>
           <label for="service">服务</label><select id="service"><option value="microsoft">Microsoft 免费翻译</option><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="custom">自定义兼容接口</option></select>
@@ -608,6 +650,8 @@
     $("auto-site").checked = autoTranslateEnabled(config);
     $("auto-site-host").textContent = currentHost() || "当前页面不可设置";
     $("auto-site").disabled = !currentHost();
+    $("show-dock").checked = config.showDock;
+    $("gesture-fingers").value = String(config.gestureFingers);
     setApiKeyVisible(false);
     updateServiceFields(false);
   }
@@ -628,7 +672,9 @@
       translationStyle: $("translation-style").value,
       batchSize: clamp($("batch").value, 1, 10),
       concurrency: clamp($("concurrency").value, 1, 4),
-      autoTranslateHosts: autoHosts
+      autoTranslateHosts: autoHosts,
+      showDock: $("show-dock").checked,
+      gestureFingers: Number($("gesture-fingers").value)
     };
     return Object.assign({}, config, next);
   }
@@ -1137,7 +1183,10 @@
   // 阅读正文定位与段落筛选
   // ---------------------------------------------------------------------------
 
-  function normalizedText(element) { return (element.innerText || element.textContent || "").replace(/\s+/g," ").trim(); }
+  // 一律用 textContent 读取（v1.3.2）：innerText 每次调用都会强制布局，是全页扫描
+  // 最大的隐性开销；且与改写检测的 elementSourceText（textContent）保持同一口径，
+  // 避免含隐藏文字的段落被反复误判"原文已改写"而重复翻译。可见性由 layoutInfo/isVisible 单独过滤。
+  function normalizedText(element) { return (element.textContent || "").replace(/\s+/g," ").trim(); }
   function isVisible(element) {
     var style = getComputedStyle(element); var rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0 && rect.width > 0 && rect.height > 0;
@@ -1145,26 +1194,35 @@
   // 所有"用户可编辑"判定都走这里，避免各处写法不一致导致草稿被翻译或上传。
   // contenteditable 的 ""、"true"、"plaintext-only" 以及裸属性（getAttribute 返回 ""）都视为可编辑；
   // "false" 会中断继承；祖先可编辑同样生效；document.designMode === "on" 时整页可编辑。
+  // v1.3.2：判定结果按元素缓存，扫描热路径上同一祖先链不再重复向上遍历。
+  // 缓存在每轮扫描开始时重建；contenteditable 变更本身会触发重扫，不会读到旧值。
+  var editableResultCache = new WeakMap();
   function isEditableElement(element) {
     if (!element || element.nodeType !== 1) return false;
+    var cached = editableResultCache.get(element);
+    if (cached != null) return cached;
+    var result = false;
     try {
-      if (document.designMode && String(document.designMode).toLowerCase() === "on") return true;
+      if (document.designMode && String(document.designMode).toLowerCase() === "on") result = true;
     } catch (_) {}
-    var node = element;
-    while (node && node.nodeType === 1) {
-      if (node.isContentEditable === true) return true;
-      if (node.getAttribute) {
-        var raw = node.getAttribute("contenteditable");
-        if (raw != null) {
-          // 与 Chromium 一致：只有显式 "false" 表示不可编辑，其余写法都表示可编辑。
-          if (String(raw).toLowerCase() === "false") return false;
-          return true;
+    if (!result) {
+      var node = element;
+      while (node && node.nodeType === 1) {
+        if (node.isContentEditable === true) { result = true; break; }
+        if (node.getAttribute) {
+          var raw = node.getAttribute("contenteditable");
+          if (raw != null) {
+            // 与 Chromium 一致：只有显式 "false" 表示不可编辑（中断继承），其余写法都表示可编辑。
+            result = String(raw).toLowerCase() !== "false";
+            break;
+          }
         }
+        if (node.tagName === "BODY" || node.tagName === "HTML") break;
+        node = node.parentElement;
       }
-      if (node.tagName === "BODY" || node.tagName === "HTML") break;
-      node = node.parentElement;
     }
-    return false;
+    editableResultCache.set(element, result);
+    return result;
   }
 
   // 会被整块排除的祖先：脚本、媒体、控件本体、编辑区、隐藏区。
@@ -1186,44 +1244,12 @@
     return !!element.closest("script,style,noscript,svg,canvas,video,audio,textarea,input,select,pre,code,[aria-hidden='true'],#rf-via-host,." + TRANSLATION_CLASS);
   }
 
-  function innermostRoots(nodes) {
-    return nodes.filter(function (node,index) {
-      return nodes.indexOf(node) === index && !nodes.some(function (other) { return other !== node && node.contains(other); });
-    });
-  }
-
-  function visibleContentRoots(selector, minimum) {
-    return innermostRoots(Array.prototype.slice.call(document.querySelectorAll(selector)).filter(function (node) {
-      return isVisible(node) && normalizedText(node).length >= minimum;
-    }));
-  }
+  // （v1.3.2 清理：visibleContentRoots / articleCoverage / articleLeadRoots / innermostRoots /
+  //   interfaceMarker 均为上游重构后遗留的无调用死代码，已移除。）
 
   function readingRoots() {
     // 与 Read Frog 上游一致，从文档内容根开始按实际布局递归，不再猜测某个 article/main 才是正文。
     return [document.body];
-  }
-
-  function articleCoverage(articleRoots, mainRoots) {
-    var articleText=articleRoots.reduce(function (sum,node) { return sum + normalizedText(node).length; },0);
-    var mainText=mainRoots.reduce(function (sum,node) { return sum + normalizedText(node).length; },0);
-    return mainText ? Math.min(1,articleText / mainText) : 1;
-  }
-
-  // 有些新闻站把标题、摘要和作者区放在正文节点的前一个兄弟节点中。
-  function articleLeadRoots(bodyRoots) {
-    var leads=[];
-    bodyRoots.forEach(function (bodyRoot) {
-      var sibling=bodyRoot.previousElementSibling, checked=0;
-      while (sibling && checked++ < 3) {
-        var marker=((typeof sibling.className === "string" ? sibling.className : "") + " " + (sibling.id || "")).toLowerCase();
-        var semantic=/(article|post|story|entry)[\s_-]*(head|top|title|meta)/.test(marker) ||
-          !!sibling.querySelector("h1,[itemprop='headline'],[class*='article_title'],[class*='story-title']");
-        var text=normalizedText(sibling);
-        if (semantic && isVisible(sibling) && text.length >= 2 && text.length <= MAX_TEXT_LENGTH) leads.push(sibling);
-        sibling=sibling.previousElementSibling;
-      }
-    });
-    return innermostRoots(leads);
   }
 
   // 关键词分两类：
@@ -1242,8 +1268,6 @@
     }
     return null;
   }
-
-  function interfaceMarker(element, root) { return !!markerKind(element, root); }
 
   // 关键词命中只是"弱信号"：id/class 里出现 control/stats/menu 之类的词，不代表里面不是正文。
   function looksLikeProse(text) {
@@ -1475,20 +1499,30 @@
   // 移植上游的布局遍历思想：块节点负责一段，行内节点与文字归入最近的块级段落。
   function layoutParagraphCandidates(root) {
     var result=[];
+    // 两阶段扫描（v1.3.2）：遍历期间只收集待包装的文字节点（占位入列），
+    // 全部布局读取结束后再统一写 DOM——消除"边读样式边插节点"造成的反复强制重排。
     function wrapTextNode(node) {
-      var text=(node.nodeValue || "").replace(/\s+/g," ").trim();
-      if (text.length < 2 || !/[A-Za-z0-9\u00c0-\uffff]/.test(text)) return;
-      var wrapper=document.createElement("span");
-      wrapper.className=SOURCE_SEGMENT_CLASS;
-      node.parentNode.insertBefore(wrapper,node);
-      wrapper.appendChild(node);
-      result.push(wrapper);
+      result.push(node);
     }
     function visit(element) {
       var info=layoutInfo(element);
       if (!info) return { hasText:false, inline:false };
       if (element.classList.contains(SOURCE_SEGMENT_CLASS)) {
         return { hasText:normalizedText(element).length > 0, inline:true };
+      }
+      // 视口剪枝（v1.3.3）：整体位于扩展视口外的块级子树先不遍历，整树只读一次
+      // getBoundingClientRect 记账到 deferredRoots，等主流程收尾补扫；返回值与
+      // layoutInfo 为 null 时一致，父节点把它当作"没有文字的子树"。
+      // 只在 layoutInfo 通过后判定（display:none 的 0×0 矩阵不会误入账）；
+      // 行内元素不剪；顶层根（含 body/html）不剪——补扫时根若再被剪掉，
+      // 会再次入账导致补扫循环永不收敛。innerHeight 异常（0/缺失）时放弃剪枝照常遍历。
+      if (!info.inline && element !== root &&
+          element !== document.body && element !== document.documentElement && innerHeight > 0) {
+        var vpRect=element.getBoundingClientRect();
+        if (vpRect.top > innerHeight * 2.5 || vpRect.bottom < -innerHeight) {
+          deferredRoots.push(element);
+          return { hasText:false, inline:false };
+        }
       }
       var hasInlineContent=false, hasBlockContent=false;
       var childResults=[];
@@ -1521,6 +1555,18 @@
       return { hasText:hasText, inline:info.inline && !hasBlockContent };
     }
     visit(root);
+    // 阶段二：统一包装占位的文字节点；顺序与遍历序一致，无效文本原地剔除。
+    for (var i=0; i<result.length; i++) {
+      if (result[i].nodeType !== 3) continue;
+      var node=result[i];
+      var text=(node.nodeValue || "").replace(/\s+/g," ").trim();
+      if (text.length < 2 || !/[A-Za-z0-9\u00c0-\uffff]/.test(text)) { result.splice(i,1); i--; continue; }
+      var wrapper=document.createElement("span");
+      wrapper.className=SOURCE_SEGMENT_CLASS;
+      node.parentNode.insertBefore(wrapper,node);
+      wrapper.appendChild(node);
+      result[i]=wrapper;
+    }
     return result;
   }
 
@@ -1741,6 +1787,7 @@
 
   function scanNewRecords(scopeRoots) {
     discardDetachedRecords();
+    editableResultCache = new WeakMap();
     var added = [], newRecords = 0;
     // 空数组是"明确没有需要扫描的子树"，不是"回退到全页扫描"。
     if (scopeRoots && scopeRoots.length === 0) { app.roundPending = false; return added; }
@@ -1809,7 +1856,9 @@
       // 容器里已经存在子元素的译文时不能再把整容器当新段落：否则"原文"里会混进译文，
       // 译文节点里出现两个标记，等于把译文又翻了一遍。
       if (!interactive && element.querySelector("." + TRANSLATION_CLASS)) return false;
-      // inline 元素的 innerText 在部分 Chromium/WebView 中会扩展到整行兄弟节点；包装段必须只读自身文本。
+      // textContent 只返回元素自身子树的文字、不含布局语义；innerText 会按渲染行
+      // 合并兄弟节点的可见文本且强制重排。包装段（SOURCE_SEGMENT）是脚本插入的
+      // 叶子容器，读自身 textContent 拿到的就是它包装的那段原文。
       var text = element.classList.contains(SOURCE_SEGMENT_CLASS)
         ? (element.textContent || "").replace(/\s+/g," ").trim()
         : normalizedText(element);
@@ -1870,7 +1919,10 @@
       record.status = "pending";
       added.push(record);
     });
-    added.sort(function (a,b) { return priority(a) - priority(b); });
+    // 一次预计算优先级再排序：比较器内读布局是 O(n log n) 次，预计算降为 O(n)。
+    added = added.map(function (record) { return { record:record, p:priority(record) }; })
+      .sort(function (a,b) { return a.p - b.p; })
+      .map(function (item) { return item.record; });
     return added;
   }
 
@@ -2095,7 +2147,10 @@
   async function processRecords(records, jobId) {
     var pending = records.slice();
     // 阅读顺序只在这里排一次，之后 takeBatch 直接从头取，避免每批重排整个队列。
-    pending.sort(function (a,b) { return priority(a) - priority(b); });
+    // 优先级先预计算再排序，避免比较器内重复读取 getBoundingClientRect。
+    pending = pending.map(function (record) { return { record:record, p:priority(record) }; })
+      .sort(function (a,b) { return a.p - b.p; })
+      .map(function (item) { return item.record; });
     var cfg = Object.assign({}, config);
     var readyToReveal = {};
     var nextReveal = 0;
@@ -2187,9 +2242,13 @@
   // initialRoots 为 null 表示全页扫描（首次或需要兜底），否则只扫给定子树；
   // 一轮扫描达到"每轮上限"时会设置 app.roundPending，这里继续下一轮，因此超长页面
   // 会被分成多轮处理并最终全部翻译完，而不是卡在 500 段。
+  // v1.3.3 视口补扫：首轮扫描被视口剪枝推迟的子树记录在 deferredRoots 里，
+  // 在本循环内整批补扫——这是所有扫描入口（startTranslation 主流程与 mutation
+  // 触发的增量扫描）的必经之路，放在这里才能保证"整页最终全部翻译"对动态
+  // 新增内容同样成立；补扫复用既有的 roundPending/deferredCandidates 分轮机制。
   async function processNewRecords(jobId, initialRoots) {
     var firstPass = true;
-    while (jobId === app.jobId && (firstPass || app.rescanPending || app.roundPending)) {
+    while (jobId === app.jobId && (firstPass || app.rescanPending || app.roundPending || deferredRoots.length)) {
       var continuingRound = !firstPass && app.roundPending;
       // 任务执行期间到达的变化单独累积在 app.mutationScope 里；它必须和首轮的根一起处理，
       // 否则"忙碌期间新增的内容"会在这一次循环里被丢掉（严格递增的页面会永久漏译）。
@@ -2199,12 +2258,21 @@
       if (firstPass) roots = combineScanRoots(initialRoots, extra);
       // 达到"每轮上限"而继续分轮时，剩余候选散布在全页各处，必须继续全页扫描。
       else if (continuingRound) roots = null;
+      // 用户正在看的新内容（mutation 增量）优先于视口外补扫。
+      else if (extra && extra.length) roots = extra;
+      else if (deferredRoots.length) {
+        // 补扫：整批取走。这些根作为扫描顶层不再参与剪枝，因此补扫不会把
+        // 同一批根重新入账；它们内部仍处于视口外的更深子树会再次入账，
+        // 由后续迭代继续补扫——入账只会沿 DOM 严格向下，循环必然收敛。
+        roots = deferredRoots;
+        deferredRoots = [];
+      }
       else roots = extra;
       firstPass = false;
       app.rescanPending = false;
       var added = scanNewRecords(roots);
       if (added.length) await processRecords(added, jobId);
-      if (!added.length && !app.rescanPending) break;
+      if (!added.length && !app.rescanPending && !deferredRoots.length) break;
     }
   }
 
@@ -2227,6 +2295,9 @@
     try { validateConfig(config); } catch (error) { openSettings(); showSettingsStatus(error.message, true); return; }
     app.active = true; var jobId = ++app.jobId;
     app.deferredCandidates = null;
+    // 新任务从零开始记账：上一次任务（含被 stopTranslation 中断的）遗留的
+    // 剪枝区域即使还未补扫，也会在本次全页扫描中按当前视口重新判定。
+    deferredRoots = [];
     startObserver();
     setPhase("scanning");
     await allowBusyStateToPaint();
@@ -2244,8 +2315,9 @@
     }
     recount();
     if (!records.length) {
-      // 首轮可能已经达到"每轮上限"，剩余候选交给 processNewRecords 继续分轮处理。
-      if (app.roundPending) { setPhase("translating"); await processNewRecords(jobId, null); }
+      // 首轮可能已经达到"每轮上限"（app.roundPending），也可能把视口外子树记入了
+      // deferredRoots；两种待办都交给 processNewRecords 的分轮/补扫循环处理。
+      if (app.roundPending || deferredRoots.length) { setPhase("translating"); await processNewRecords(jobId, null); }
       if (jobId !== app.jobId) return;
       recount();
       setPhase(app.counters.failed ? "partial" : "complete");
@@ -2277,7 +2349,7 @@
 
   function restorePage() {
     pendingStart = false; bodyReadyHandler = null;
-    stopTranslation(); app.active = false; app.rescanPending = false; app.roundPending = false; app.deferredCandidates = null; app.mutationScope = null; stopObserver();
+    stopTranslation(); app.active = false; app.rescanPending = false; app.roundPending = false; app.deferredCandidates = null; app.mutationScope = null; deferredRoots = []; stopObserver();
     app.records.forEach(cleanupRecord); app.records.clear(); app.counters = emptyCounters();
     // 候选扫描可能包装了尚未进入队列的交互文字，恢复时也必须一并还原。
     Array.prototype.slice.call(document.querySelectorAll("." + SOURCE_SEGMENT_CLASS)).forEach(unwrapSourceSegment);
@@ -2426,7 +2498,25 @@
   // 每次打开设置都从已保存配置重新填充，未保存的编辑不会影响当前配置。
   function showSettingsStatus(text, error) { settingsStatus.textContent = text; settingsStatus.style.color = error ? "#bd443c" : ""; }
   function openSettings() { frogSummoned=false; closeActions(); untuckFrog(false); fillForm(); showSettingsStatus("", false); settings.classList.add("open"); backdrop.classList.add("open"); }
-  function closeSettings() { settings.classList.remove("open"); backdrop.classList.remove("open"); tuckFrog(1000); }
+  // 关闭面板（v1.3.2）：saveDraft 为 true 时自动保存草稿（点蒙层关闭）；
+  // 点 ✕ 关闭则丢弃草稿（下次打开时 fillForm 会从已保存配置重新填充）。
+  // 配置无效时不保存并照常关闭；若本次开启了对当前网站的自动翻译，关闭后立即启动。
+  function autoSaveDraft() {
+    var wasAutomatic = autoTranslateEnabled(config);
+    try {
+      var next = readForm();
+      validateConfig(next);
+      saveConfig(next);
+      applyMode(next.mode);
+      applyDockVisibility();
+      return !wasAutomatic && autoTranslateEnabled(config);
+    } catch (_) { return false; }
+  }
+  function closeSettings(saveDraft) {
+    var startNow = saveDraft === true ? autoSaveDraft() : false;
+    settings.classList.remove("open"); backdrop.classList.remove("open"); tuckFrog(1000);
+    if (startNow) setTimeout(startAutomaticTranslation, 180);
+  }
 
   async function testService() {
     var draft = readForm(); showSettingsStatus("正在连接服务…", false);
@@ -2497,6 +2587,159 @@
     readingTouchMoved = true; userScrollUntil = Date.now() + 1200; concealForUserScroll();
   }, { capture:true, passive:true });
   document.addEventListener("touchend", function () { readingTouch = false; }, { capture:true, passive:true });
+
+  // 悬浮球开关：隐藏后仍保留四指手势与 Via 菜单入口，不影响进行中的翻译。
+  function applyDockVisibility() {
+    if (config.showDock) frogDock.removeAttribute("data-hidden");
+    else frogDock.setAttribute("data-hidden", "1");
+  }
+
+  // 四指手势的轻量文字反馈；挂在宿主 Shadow DOM 内，不污染页面结构。
+  var gestureToast = null;
+  var gestureToastTimer = 0;
+  function showGestureToast(text) {
+    if (!gestureToast) {
+      gestureToast = document.createElement("div");
+      gestureToast.id = "gesture-toast";
+      gestureToast.setAttribute("role", "status");
+      root.appendChild(gestureToast);
+    }
+    gestureToast.textContent = text;
+    gestureToast.classList.add("show");
+    clearTimeout(gestureToastTimer);
+    gestureToastTimer = setTimeout(function () { gestureToast.classList.remove("show"); }, 1400);
+  }
+
+  // 四指长按屏幕：在翻译结果与原文之间切换。翻译进行中长按=停止。
+  // 识别策略按真机反馈调整过一轮，核心是「不因为系统抢走触摸序列就判失败」：
+  //  - 落指允许滑动时间窗（FOUR_FINGER_LAND_WINDOW_MS），4 根手指不必同一瞬间在屏；
+  //  - 落屏后有 settle 期（FOUR_FINGER_SETTLE_MS）忽略坐标跳变；
+  //  - 位移判定用圆形 slop 半径并随触点自身尺寸缩放，斜向小抖动不误杀；
+  //  - touchcancel 只有在有效触点真的掉到 4 以下时才取消，系统 palm/pointer gesture
+  //    吞掉序列时手指仍在屏上，计时器继续走完并照常触发；
+  //  - 触发时长压到 FOUR_FINGER_HOLD_MS(320ms) 级别，触发后保留 1.5 秒去抖。
+  // 全部监听器 passive 且不调用 preventDefault，避免干扰页面自身的多点触控手势。
+  var FOUR_FINGER_MIN = 4;
+  // 生效的手指指数在运行时从配置读取（设置面板可选双指/三指/四指），改完设置即时生效、无需刷新。
+  // 非法或缺失（配置尚未迁移、沙箱空对象等）一律回退四指，与上面的默认阈值保持一致。
+  function fourFingerMin() {
+    var n = Math.round(Number(config.gestureFingers) || 0);
+    return n >= 2 && n <= 4 ? n : 4;
+  }
+  // 触发时长 320ms：主流手势识别器（如 Android pointer slop 后的 tap/long-press 判定）
+  // 在 300ms 量级就认为可触发；500ms 太长，真机按住时手指已经疲劳且中途更易被系统判定为
+  // 多指操作而吞掉序列，识别率反而更低。
+  var FOUR_FINGER_HOLD_MS = 320;
+  // 落指时间窗 300ms：从第 1 指落屏起算，窗口内累计到 4 指即启动触发计时。
+  // 取 300ms 是因为人手从抬起到依次落完四指大约 150-250ms，300ms 能覆盖绝大多数
+  // 正常速度；超过这个量级更像是两次独立的按压，不应拼成同一个手势。
+  var FOUR_FINGER_LAND_WINDOW_MS = 300;
+  // settle 期 60ms：触点刚接触屏幕时接触面积突变，浏览器上报的 clientX/Y 会有一次跳变。
+  // 60ms 足够越过这次跳变，又短到不会漏掉用户真正的主动拖动。
+  var FOUR_FINGER_SETTLE_MS = 60;
+  // 圆形 slop 半径 = clamp(max(radiusX,radiusY) * 0.6, 10px, 18px)。
+  //  系数 0.6：指尖接触面直径的 60% 约等于「手指确实在移动」的可感知门槛；
+  //  下限 10px：很多安卓 WebView 不报 radiusX/radiusY（为 0 或 undefined），需要一个
+  //  与设备密度无关的 CSS px 兜底，10px 小于 12px 逐轴旧值，不会放宽过度；
+  //  上限 18px：超大接触面（湿手、粗指纹、贴膜边缘）时避免 slop 过大导致滑动误触发。
+  var FOUR_FINGER_SLOP_SCALE = 0.6;
+  var FOUR_FINGER_SLOP_MIN = 10;
+  var FOUR_FINGER_SLOP_MAX = 18;
+  var FOUR_FINGER_DEBOUNCE_MS = 1500;
+  var fourFingerTimer = 0;
+  var fourFingerPoints = null;
+  var fourFingerFirstLandAt = 0;
+  var lastFourFingerAt = 0;
+
+  function cancelFourFingerHold() {
+    if (fourFingerTimer) { clearTimeout(fourFingerTimer); fourFingerTimer = 0; }
+    fourFingerPoints = null;
+    fourFingerFirstLandAt = 0;
+  }
+
+  function fireFourFingerGesture() {
+    var now = Date.now();
+    if (now - lastFourFingerAt < FOUR_FINGER_DEBOUNCE_MS) return;
+    lastFourFingerAt = now;
+    if (isBusyPhase()) { stopTranslation(); showGestureToast("已停止翻译"); return; }
+    if (app.active) { restorePage(); showGestureToast("已恢复原文"); return; }
+    try { validateConfig(config); } catch (error) { openSettings(); showSettingsStatus(error.message, true); return; }
+    frogSummoned = true;
+    startTranslation();
+    showGestureToast("开始翻译");
+  }
+
+  // 圆形 slop 半径：优先按触点自身接触面积缩放，拿不到半径时回退到固定 CSS px 下限。
+  function fourFingerSlopRadius(touch) {
+    var reported = Math.max(touch.radiusX || 0, touch.radiusY || 0);
+    if (!reported) return FOUR_FINGER_SLOP_MIN;
+    return Math.min(FOUR_FINGER_SLOP_MAX, Math.max(FOUR_FINGER_SLOP_MIN, reported * FOUR_FINGER_SLOP_SCALE));
+  }
+
+  function trackFourFingerOrigins(event, now) {
+    for (var i = 0; i < event.touches.length; i++) {
+      var touch = event.touches[i];
+      // 已在跟踪的触点保留原点：touchstart 重复上报时不能把起点挪到当前坐标，
+      // 否则「按住不动」也会被判成移动了 slop 距离。
+      if (fourFingerPoints[touch.identifier]) continue;
+      fourFingerPoints[touch.identifier] = {
+        x: touch.clientX, y: touch.clientY, at: now, slop: fourFingerSlopRadius(touch)
+      };
+    }
+  }
+
+  document.addEventListener("touchstart", function (event) {
+    if (event.target === host || host.contains(event.target) || settings.classList.contains("open")) { cancelFourFingerHold(); return; }
+    // 已在计时：第 5 指落下或长按途中再次 touchstart，不重置也不取消既有计时。
+    if (fourFingerTimer) return;
+    var now = Date.now();
+    // 落指窗口已过期：上一次按压在窗口内没凑够 4 指，整段作废；
+    // 要等手指全部抬起（touchend 清理）后，下一次按压才重新开窗。
+    if (fourFingerPoints && now - fourFingerFirstLandAt > FOUR_FINGER_LAND_WINDOW_MS) { cancelFourFingerHold(); return; }
+    if (!fourFingerPoints) { fourFingerPoints = {}; fourFingerFirstLandAt = now; }
+    trackFourFingerOrigins(event, now);
+    // 窗口内累计到 4 指才启动触发计时；不足 4 指只跟踪起点，不设计时器。
+    if (event.touches.length < fourFingerMin()) return;
+    fourFingerTimer = setTimeout(function () {
+      fourFingerTimer = 0;
+      fourFingerPoints = null;
+      fireFourFingerGesture();
+    }, FOUR_FINGER_HOLD_MS);
+  }, { passive:true });
+
+  document.addEventListener("touchmove", function (event) {
+    if (!fourFingerTimer || !fourFingerPoints) return;
+    var now = Date.now();
+    // 只统计已记录起点的手指：落指窗口内后到的第 5 指不参与位移判断。
+    var hit = 0;
+    for (var i = 0; i < event.touches.length; i++) {
+      var touch = event.touches[i];
+      var origin = fourFingerPoints[touch.identifier];
+      if (!origin) continue;
+      hit++;
+      // settle 期：触点刚落屏时接触面积突变会带坐标跳变，忽略这一小段。
+      if (now - origin.at < FOUR_FINGER_SETTLE_MS) continue;
+      var dx = touch.clientX - origin.x;
+      var dy = touch.clientY - origin.y;
+      // 圆形 slop：斜向抖动的合成位移小于半径，不该像逐轴比较那样被提前取消。
+      if (Math.sqrt(dx * dx + dy * dy) > origin.slop) { cancelFourFingerHold(); return; }
+    }
+    if (hit < fourFingerMin()) cancelFourFingerHold();
+  }, { passive:true });
+
+  document.addEventListener("touchend", function (event) {
+    if (event.touches.length < fourFingerMin()) cancelFourFingerHold();
+  }, { passive:true });
+
+  document.addEventListener("touchcancel", function (event) {
+    // 安卓 WebView 检测到 4+ 触点时，系统 pointer gesture / palm detection 经常直接吞掉
+    // 整串触摸序列并派发 touchcancel，而手指其实还在屏上（touches 仍 >= 4）。这不是按压失败，
+    // 计时器要继续走完并照常触发；系统吞序列之后也不会再有 touchmove/touchend 兜底。
+    // 只有有效触点真的掉到 4 以下（或拿不到 touches、无法确认手指仍在屏上）才判失败。
+    var remaining = event.touches ? event.touches.length : 0;
+    if (remaining < fourFingerMin()) cancelFourFingerHold();
+  }, { passive:true });
+
   window.addEventListener("wheel", function () { userScrollUntil=Date.now()+420; concealForUserScroll(); }, { passive:true });
   window.addEventListener("scroll", handleReadingScroll, { passive:true });
   document.addEventListener("scroll", handleReadingScroll, true);
@@ -2510,7 +2753,7 @@
   $("action-mode").addEventListener("click", function () { applyMode(config.mode === "bilingual" ? "translation" : "bilingual"); });
   $("action-restore").addEventListener("click", function () { closeActions(); restorePage(); tuckFrog(500); });
   $("action-settings").addEventListener("click", openSettings);
-  $("settings-close").addEventListener("click", closeSettings); backdrop.addEventListener("click", closeSettings);
+  $("settings-close").addEventListener("click", function () { closeSettings(false); }); backdrop.addEventListener("click", function () { closeSettings(true); });
   $("service").addEventListener("change", function () { updateServiceFields(true); });
   $("language").addEventListener("change", function () { $("custom-language").style.display = this.value === "custom" ? "block" : "none"; });
   $("endpoint").addEventListener("input", updateEndpointPreview);
@@ -2519,9 +2762,9 @@
   $("save").addEventListener("click", function () {
     var wasAutomatic=autoTranslateEnabled(config), next = readForm();
     try {
-      validateConfig(next); saveConfig(next); applyMode(next.mode); showSettingsStatus("设置已保存", false);
+      validateConfig(next); saveConfig(next); applyMode(next.mode); applyDockVisibility(); showSettingsStatus("设置已保存", false);
       var startNow=!wasAutomatic && autoTranslateEnabled(config);
-      setTimeout(function () { closeSettings(); if (startNow) setTimeout(startAutomaticTranslation,180); }, 450);
+      setTimeout(function () { closeSettings(false); if (startNow) setTimeout(startAutomaticTranslation,180); }, 450);
     }
     catch (error) { showSettingsStatus(error.message, true); }
   });
@@ -2532,6 +2775,7 @@
     GM_registerMenuCommand("停止翻译", stopTranslation);
     GM_registerMenuCommand("打开 Read Frog 设置", openSettings);
     GM_registerMenuCommand("恢复原文", restorePage);
+    GM_registerMenuCommand("显示/隐藏悬浮球", function () { saveConfig({ showDock: !config.showDock }); applyDockVisibility(); });
   }
 
   applyDynamicPalette();
@@ -2540,7 +2784,7 @@
     if (colorScheme.addEventListener) colorScheme.addEventListener("change", applyDynamicPalette);
     else if (colorScheme.addListener) colorScheme.addListener(applyDynamicPalette);
   }
-  fillForm(); positionFrog(); updateFrogState(); frog.classList.add("tucked");
+  fillForm(); positionFrog(); applyDockVisibility(); updateFrogState(); frog.classList.add("tucked");
   setTimeout(startAutomaticTranslation, 280);
   }
 })();

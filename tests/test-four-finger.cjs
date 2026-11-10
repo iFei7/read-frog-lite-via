@@ -4,7 +4,7 @@
  * 纯逻辑回归测试：四指手势识别率
  *
  * 手势判定逻辑不从这里手抄，而是用 start/end 两个标记从
- * read-frog-lite-via.custom.user.js 真实源码里整段截取，
+ * src/read-frog-lite-via.user.js 真实源码里整段截取，
  * 再注入假 document / 假 event（带 touches 数组）/ 假定时器 / 假 Date.now()。
  * 因此断言跑的就是发布到真机上的那一份代码，改坏了这里立刻红。
  */
@@ -12,7 +12,8 @@
 const fs = require("fs");
 const path = require("path");
 
-const SOURCE_FILE = path.join(__dirname, "read-frog-lite-via.custom.user.js");
+// 源码在仓库根的 src/ 下，本文件位于 tests/，因此向上跳一级。
+const SOURCE_FILE = path.join(__dirname, "..", "src", "read-frog-lite-via.user.js");
 const source = fs.readFileSync(SOURCE_FILE, "utf8");
 
 const BLOCK_START = source.indexOf("  // 四指长按屏幕");

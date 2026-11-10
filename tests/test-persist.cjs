@@ -1,8 +1,10 @@
 // 从真实源码中截取配置层，模拟 Via GM 存储，测试 showDock 的保存/重载/恢复全链路
 const fs = require("fs");
 const vm = require("vm");
-const path = "C:/Users/hwx1254427/WorkBuddy/2026-09-30-12-03-47/read-frog-lite-via.custom.user.js";
-const src = fs.readFileSync(path, "utf8");
+const path = require("path");
+// 源码在仓库根的 src/ 下，本文件位于 tests/，因此向上跳一级。
+const SOURCE_FILE = path.join(__dirname, "..", "src", "read-frog-lite-via.user.js");
+const src = fs.readFileSync(SOURCE_FILE, "utf8");
 
 // 截取 CONFIG_KEY 到 var config = migrateConfig(); 之间的真实代码
 const start = src.indexOf("var CONFIG_KEY = {") >= 0 ? src.indexOf("var CONFIG_KEY = {") : src.indexOf("var CONFIG_KEY = ");

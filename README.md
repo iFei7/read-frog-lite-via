@@ -1,15 +1,71 @@
 # Read Frog Lite for Via
 
-面向 Via 浏览器的轻量级网页翻译用户脚本，当前版本为 **v1.2.1**。
+面向 Via 浏览器的单文件网页翻译用户脚本（当前 **v1.3.8**），基于上游 [Read Frog](https://github.com/mengxi-ream/read-frog) 二次开发，采用 GPL-3.0-only 发布。
 
-> 本项目基于 [Read Frog](https://github.com/mengxi-ream/read-frog) 进行二次开发。  
+> 本项目基于 [Read Frog](https://github.com/mengxi-ream/read-frog) 进行二次开发。
 > This project is a modified work based on Read Frog.
 
 由于 Via 浏览器长期缺少为移动端阅读场景专门设计的翻译脚本，本项目参考 Read Frog 的设计与翻译思路，使用 Vibe Coding 完成了适配 Via 的轻量实现。它专注于手机上的网页阅读与手动翻译体验，不是 Read Frog 官方版本。
 
-## 简介
+## 项目结构
 
-Read Frog Lite for Via 以单文件用户脚本形式运行在 Via 中。点击悬浮青蛙即可渐进翻译正文，并支持直接替换原文、双语对照和按网站自动翻译。
+单文件油猴脚本，不做模块化拆分、不引入运行时依赖、不建 CI。仓库只按职责分层：
+
+| 路径 | 说明 |
+| --- | --- |
+| `src/read-frog-lite-via.user.js` | **唯一可编辑源文件**（定制版，含 `// @version`），所有改动都落在这里 |
+| `upstream/read-frog-lite-via-1.2.1.user.js` | 上游 v1.2.1 原版基线，只读参考，用于对比定制改动 |
+| `tests/test-four-finger.cjs` | 多指手势回归测试（22 用例），从源码按标记截取真实代码执行 |
+| `tests/test-persist.cjs` | 配置持久化回归测试（13 用例），截取配置层在 vm 沙箱里跑 |
+| `tests/test-via-port.mjs` | 既有端到端测试（依赖 playwright，未随仓库安装） |
+| `scripts/release.cjs` | 零依赖发布脚本：读版本号 → 同步 `rfvia-publish/` |
+| `docs/` | 开发指南、分析报告、优化方向记录与 `images/` |
+| `rfvia-publish/` | 部署产物：`index.html` 下载页 + 各版本 `.user.js` / `.txt` |
+| `package.json` | 只有 `scripts`，无任何依赖字段 |
+
+## 开发流程
+
+```bash
+# 1. 只改 src/read-frog-lite-via.user.js
+# 2. 语法检查 + 回归测试（必须 22/22 与 13 通过 / 0 失败）
+npm run check
+npm test
+# 3. 同步发布产物（读 @version → 生成 .user.js/.txt → 改 index.html）
+npm run release
+# 4. 部署：提交 rfvia-publish/ 后由维护者发布到静态托管
+git add -A && git commit -m "feat: ..."
+```
+
+改版本号只需改 `src/read-frog-lite-via.user.js` 头部的 `// @version`，再执行 `npm run release`；脚本不联网、不读本机其他路径。详细说明（新增翻译服务的完整步骤、调试技巧、常见假红排查）见 [docs/development.md](docs/development.md)。
+
+## 如何新增一个翻译服务
+
+新服务不是改一处就够，下面四处必须联动（缺一处会出现「设置里选得到但翻译报错」或「有响应但缓存串味」）：
+
+1. **服务枚举**：`DEFAULT_CONFIG.service` 默认值 + `normalizeConfig()` 里的 `isOneOf(source.service, [...])` 白名单，加上新的 `service` 取值。
+2. **设置面板**：`<select id="service">` 增加 `<option>`；`updateServiceFields()` 里同步 `ai-fields` 显隐、`custom-endpoint-wrap` 显隐与模型下拉候选。
+3. **端点解析**：`resolvedEndpoint()` 为新服务返回固定地址（或走 `custom` 的自定义地址补全逻辑）。
+4. **翻译分发**：`requestTranslations()` 里的 `providerCall` 按 `cfg.service` 分发，新增分支调用对应的 `xxxTranslate()` 实现（现有两条：`microsoftTranslate()` 与 `aiTranslate()`）；若请求体不走 Chat Completions 格式，需要单独写请求与解析。
+
+补充检查点：`migrateConfig()` 的旧配置迁移（`provider`/`endpoint` → `service`）、缓存键（`translationCacheKey()` 会带上服务标识，避免不同服务共用缓存）、`validateConfig()` 的必填校验。
+
+## 测试桩的两个已知坑
+
+两个 `.cjs` 测试都是「从真实源码截取代码 + 假 DOM」运行，不是重写逻辑，因此桩必须足够像真机：
+
+1. **`El` 桩必须有 `className` 的 setter**。脚本里用 `el.className = "..."` 切换状态，若桩只提供 `classList` 或只读 `className`，赋值会被静默丢弃，激活态判断随之错乱 —— 表现为莫名其妙的假红。
+2. **沙箱必须预置 `var config = {}`**。截取的代码块里有 `validateConfig(config)`，若 `config` 未声明会抛 `ReferenceError`，而外层 `try/catch` 会把异常吞掉，测试因此「通过」或「随机失败」，排查成本极高。
+
+## 发布产物
+
+`rfvia-publish/` 是纯静态下载页，结构保持不变：
+
+- `index.html`：卡片式下载页，含 `.user.js` 下载按钮、直链、`.txt` 纯文本入口与 Via 安装步骤。
+- `read-frog-lite-via-v<版本>.user.js`：该版本的完整脚本，与 `src/` 逐字节一致。
+- `read-frog-lite-via-v<版本>.txt`：同一份脚本的纯文本版（CRLF → LF 归一，便于手机上长按复制）。
+- 历史版本文件保留不删，便于回滚与对比。
+
+`npm run release` 会更新 `index.html` 的标题、`.ver` 行与两处 `.user.js`、`.txt` 链接；页面底部的版本说明段落（`.note`）是人工撰写的变更描述，脚本不会自动改写，发版时请手动更新。
 
 ## Features
 
@@ -29,7 +85,7 @@ Read Frog Lite for Via 以单文件用户脚本形式运行在 Via 中。点击�
 
 ## Installation
 
-1. 下载或复制 [`src/read-frog-lite-via.user.js`](src/read-frog-lite-via.user.js)。
+1. 下载或复制 [`src/read-frog-lite-via.user.js`](src/read-frog-lite-via.user.js)（或从 `rfvia-publish/` 取对应版本）。
 2. 将文件传到 Android 设备，或复制完整脚本内容。
 3. 在 Via 中打开“设置 → 脚本”，从本地导入脚本或新建脚本后粘贴保存。
 4. 启用脚本并刷新网页。页面右侧会出现半隐藏的青蛙悬浮球。
@@ -78,3 +134,11 @@ Read Frog Lite for Via 以单文件用户脚本形式运行在 Via 中。点击�
 本项目采用 [GPL-3.0-only](LICENSE) 许可证发布。
 
 发布或再分发修改版本时，请保留上游归属与许可证声明，并同时提供对应源码。
+
+## 文档
+
+- [docs/development.md](docs/development.md)：开发指南（结构、新增服务、调试、发布、排查假红）
+- [docs/read-frog-lite-via-分析报告.md](docs/read-frog-lite-via-分析报告.md)：代码结构分析
+- [docs/read-frog-lite-via-优化方向分析.md](docs/read-frog-lite-via-优化方向分析.md)：优化方向分析
+- [docs/read-frog-lite-via-优化方向修订与实施记录.md](docs/read-frog-lite-via-优化方向修订与实施记录.md)：优化实施记录
+- [CHANGELOG.md](CHANGELOG.md)：版本变更
