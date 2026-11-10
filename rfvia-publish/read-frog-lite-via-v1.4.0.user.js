@@ -1075,6 +1075,8 @@
       try {
         return await chain[i].run(texts, cfg, jobId);
       } catch (error) {
+        // 用户主动停止（abort）必须立刻终止整条链，不能继续请求下一个通道。
+        if (error && error.kind === "abort") throw error;
         lastError = error;
         failures.push(chain[i].name + "：" + (error && error.message ? error.message : String(error)));
       }

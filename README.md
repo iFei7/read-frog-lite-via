@@ -18,7 +18,7 @@
 | `tests/test-four-finger.cjs` | 多指手势回归测试（25 用例），从源码按标记截取真实代码执行 |
 | `tests/test-persist.cjs` | 配置持久化回归测试（18 用例），截取配置层在 vm 沙箱里跑 |
 | `tests/test-view-toggle.cjs` | 原文/译文二态切换与轻点语义测试（29 项断言），截取 `restorePage`~`retryRecord` 与 `dragEnd` |
-| `tests/test-free-providers.cjs` | 免费通道测试（49 项断言），按 `免费通道 BEGIN/END` 标记截取后注入请求桩，全程不联网 |
+| `tests/test-free-providers.cjs` | 免费通道测试（51 项断言），按 `免费通道 BEGIN/END` 标记截取后注入请求桩，全程不联网 |
 | `tests/test-via-port.mjs` | 既有端到端测试（依赖 playwright，未随仓库安装） |
 | `scripts/release.cjs` | 零依赖发布脚本：读版本号 → 同步 `rfvia-publish/` |
 | `docs/` | 开发指南、分析报告、优化方向记录与 `images/` |
@@ -29,7 +29,7 @@
 
 ```bash
 # 1. 只改 src/read-frog-lite-via.user.js
-# 2. 语法检查 + 回归测试（必须 25/25、18/0、29/0、49/0 全绿）
+# 2. 语法检查 + 回归测试（必须 25/25、18/0、29/0、51/0 全绿）
 npm run check
 npm test
 # 3. 同步发布产物（读 @version → 生成 .user.js/.txt → 改 index.html）

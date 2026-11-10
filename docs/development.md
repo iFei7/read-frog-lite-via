@@ -14,7 +14,7 @@ upstream/read-frog-lite-via-1.2.1.user.js  上游原版基线，只读，用于�
 tests/test-four-finger.cjs              手势回归（25 用例）
 tests/test-persist.cjs                  配置持久化回归（18 用例）
 tests/test-view-toggle.cjs              原文/译文切换与轻点语义（29 项断言）
-tests/test-free-providers.cjs           免费通道与降级链（49 项断言，全桩不联网）
+tests/test-free-providers.cjs           免费通道与降级链（51 项断言，全桩不联网）
 tests/test-via-port.mjs                 端到端移植测试（需要 playwright）
 scripts/release.cjs                     发布同步脚本
 docs/development.md                     本文件
@@ -37,7 +37,7 @@ git diff --no-index upstream/read-frog-lite-via-1.2.1.user.js src/read-frog-lite
 
 ```bash
 npm run check     # node --check，先过语法
-npm test          # 四个 .cjs 回归，必须 25/25、18/0、29/0、49/0 全绿
+npm test          # 四个 .cjs 回归，必须 25/25、18/0、29/0、51/0 全绿
 npm run release   # 同步 rfvia-publish/
 ```
 

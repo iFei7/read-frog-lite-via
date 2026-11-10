@@ -315,6 +315,12 @@ function youdaoResponse(code, translation) {
   await h12c.api.freeServiceFallback(["Hello"], { targetLanguage: "zh-Hans" }, 0);
   check("Edge 正常时零额外请求", h12c.log.requests.length, 0);
 
+  const h12d = createHarness({ edge: async function () { throw makeRequestError("请求已取消", "abort"); } });
+  let err12d = null;
+  try { await h12d.api.freeServiceFallback(["Hello"], { targetLanguage: "zh-Hans" }, 0); } catch (error) { err12d = error; }
+  check("用户取消（abort）时立即终止，不再请求后续通道", h12d.log.requests.length, 0);
+  check("取消错误原样抛出", err12d && err12d.kind, "abort");
+
   // 14) requestTranslations 分发
   section("14. 服务分发");
   const calls14 = [];
