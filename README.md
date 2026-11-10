@@ -151,6 +151,7 @@ git add -A && git commit -m "feat: ..."
 ## 文档
 
 - [docs/development.md](docs/development.md)：开发指南（结构、新增服务、调试、发布、排查假红）
+- [docs/translation-endpoints.md](docs/translation-endpoints.md)：免费翻译通道调研与选型（实测数据、各通道坑、为何不做 DeepSeek 网页版）
 - [docs/read-frog-lite-via-分析报告.md](docs/read-frog-lite-via-分析报告.md)：代码结构分析
 - [docs/read-frog-lite-via-优化方向分析.md](docs/read-frog-lite-via-优化方向分析.md)：优化方向分析
 - [docs/read-frog-lite-via-优化方向修订与实施记录.md](docs/read-frog-lite-via-优化方向修订与实施记录.md)：优化实施记录
