@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Read Frog Lite for Via · 定制版 v1.4.0</title>
+<title>Read Frog Lite for Via · 定制版 v1.4.1</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:system-ui,"Noto Sans SC","MiSans","Microsoft YaHei",sans-serif;background:#f4f7f3;color:#1a211c;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -21,6 +21,11 @@
   .steps h2{font-size:13px;color:#4d6656;font-weight:760;letter-spacing:.04em;margin-bottom:10px}
   .steps li{font-size:13.5px;color:#333c36;line-height:1.7;margin-left:18px}
   .note{margin-top:16px;font-size:11.5px;color:#8a948d;line-height:1.6;background:#f4f7f3;border-radius:14px;padding:10px 14px}
+  .sponsor{margin-top:22px;border-top:1px solid #e7ede7;padding-top:18px;text-align:center}
+  .sponsor h2{font-size:13px;color:#4d6656;font-weight:760;letter-spacing:.04em;margin-bottom:10px}
+  .sponsor-sub{font-size:13px;color:#59645d;line-height:1.6}
+  .sponsor img{width:100%;max-width:220px;height:auto;display:block;margin:14px auto 0;border-radius:12px;background:#fff;padding:8px;box-shadow:0 4px 14px rgba(24,48,33,.12)}
+  .sponsor-note{margin-top:10px;font-size:11.5px;color:#8a948d;line-height:1.6}
 </style>
 </head>
 <body>
@@ -29,16 +34,16 @@
     <svg viewBox="0 0 48 48" aria-hidden="true"><circle fill="#d4eadb" cx="15" cy="15" r="7"/><circle fill="#d4eadb" cx="33" cy="15" r="7"/><ellipse fill="#d4eadb" cx="24" cy="28" rx="18" ry="14"/><circle fill="#183326" cx="15" cy="15" r="2.5"/><circle fill="#183326" cx="33" cy="15" r="2.5"/><circle fill="#183326" cx="21" cy="25" r="1.2"/><circle fill="#183326" cx="27" cy="25" r="1.2"/><path fill="none" stroke="#d87969" stroke-width="3" stroke-linecap="round" d="M15 29c2.6 4 6 5.5 9 5.5s6.4-1.5 9-5.5"/></svg>
   </div>
   <h1>Read Frog Lite for Via</h1>
-  <div class="ver">定制版 v1.4.0 · 基于上游 v1.2.1</div>
+  <div class="ver">定制版 v1.4.1 · 基于上游 v1.2.1</div>
   <div class="tags">
     <span class="badge">悬浮球开关</span>
     <span class="badge">手势档位可选</span>
     <span class="badge">视口优先翻译</span>
     <span class="badge">GPL-3.0</span>
   </div>
-  <a class="dl" href="read-frog-lite-via-v1.4.0.user.js" download>下载脚本文件</a>
-  <a class="raw" href="read-frog-lite-via-v1.4.0.user.js">或长按复制此直链 → read-frog-lite-via-v1.4.0.user.js</a>
-  <a class="raw" href="read-frog-lite-via-v1.4.0.txt">纯文本版（.txt）→ read-frog-lite-via-v1.4.0.txt</a>
+  <a class="dl" href="read-frog-lite-via-v1.4.1.user.js" download>下载脚本文件</a>
+  <a class="raw" href="read-frog-lite-via-v1.4.1.user.js">或长按复制此直链 → read-frog-lite-via-v1.4.1.user.js</a>
+  <a class="raw" href="read-frog-lite-via-v1.4.1.txt">纯文本版（.txt）→ read-frog-lite-via-v1.4.1.txt</a>
   <div class="steps">
     <h2>Via 安装步骤</h2>
     <ol>
@@ -48,7 +53,13 @@
       <li>启用脚本，刷新网页即可看到青蛙悬浮球</li>
     </ol>
   </div>
-  <div class="note">v1.4.0：新增三条<strong>无需 API Key</strong> 的免费翻译通道——有道、MyMemory 与 Google（gtx 免 key 端点），设置里选中即用，不必再准备任何 Key；新增「自动」模式，按 Edge → 有道 → MyMemory 依次降级，前一通道超长、限流或网络失败时自动切到下一条，全部失败才报错并列出各通道原因。Google 在中国大陆无法直连，因此只作为手动选项、不进入降级链，避免每次降级都多等一轮超时；在网络可达时仍可单独选用。有道按 900 字符分批、返回段数不一致时自动逐条重发；MyMemory 按 500 字符切片并识别「HTTP 200 + 内容超长」的伪成功响应，不会把英文错误提示当译文显示。同时修复上一版遗留：轻点悬浮球改为与多指按压一致的原文/译文切换语义。本定制版由 ifei 维护，基于上游 Read Frog，GPL-3.0 开源。</div>
+  <div class="sponsor">
+    <h2>赞助作者</h2>
+    <p class="sponsor-sub">如果这个脚本帮你省了时间，可以请我喝杯咖啡</p>
+    <img src="sponsor-qr.jpg" alt="微信 / 支付宝 收款二维码">
+    <p class="sponsor-note">微信 / 支付宝 扫码 · 完全自愿，不影响任何功能</p>
+  </div>
+  <div class="note">v1.4.1：新增<strong>赞助页</strong>——脚本内 Via 菜单「赞助作者 ☕」或设置面板底部按钮即可打开，发布页也新增了赞助区块；二维码以 base64 内嵌在脚本里，不引外链，离线也能显示。本版只加了展示页，翻译逻辑、手势与配置项均未改动。上一版新增三条无需 API Key 的免费翻译通道——有道、MyMemory 与 Google（gtx 免 key 端点），设置里选中即用；「自动」模式按 Edge → 有道 → MyMemory 依次降级，全部失败才报错。Google 在中国大陆无法直连，仅作手动选项。本定制版由 ifei 维护，基于上游 Read Frog，GPL-3.0 开源。</div>
 </div>
 </body>
 </html>

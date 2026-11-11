@@ -156,3 +156,7 @@ git add -A && git commit -m "feat: ..."
 - [docs/read-frog-lite-via-优化方向分析.md](docs/read-frog-lite-via-优化方向分析.md)：优化方向分析
 - [docs/read-frog-lite-via-优化方向修订与实施记录.md](docs/read-frog-lite-via-优化方向修订与实施记录.md)：优化实施记录
 - [CHANGELOG.md](CHANGELOG.md)：版本变更
+
+## 赞助
+
+如果这个脚本帮你省了时间，可以[请作者喝杯咖啡](docs/images/sponsor-qr.jpg)（微信 / 支付宝扫码，完全自愿，不影响任何功能）。
