@@ -1,6 +1,6 @@
 # Read Frog Lite for Via
 
-面向 Via 浏览器的单文件网页翻译用户脚本（当前 **v1.4.0**），基于上游 [Read Frog](https://github.com/mengxi-ream/read-frog) 二次开发，采用 GPL-3.0-only 发布。
+面向 Via 浏览器的单文件网页翻译用户脚本（当前 **v1.4.2**），基于上游 [Read Frog](https://github.com/mengxi-ream/read-frog) 二次开发，采用 GPL-3.0-only 发布。
 
 > 本项目基于 [Read Frog](https://github.com/mengxi-ream/read-frog) 进行二次开发。
 > This project is a modified work based on Read Frog.
@@ -65,6 +65,7 @@ git add -A && git commit -m "feat: ..."
 - `index.html`：卡片式下载页，含 `.user.js` 下载按钮、直链、`.txt` 纯文本入口与 Via 安装步骤。
 - `read-frog-lite-via-v<版本>.user.js`：该版本的完整脚本，与 `src/` 逐字节一致。
 - `read-frog-lite-via-v<版本>.txt`：同一份脚本的纯文本版（CRLF → LF 归一，便于手机上长按复制）。
+- `read-frog-lite-via.user.js` 与 `read-frog-lite-via.txt`：固定文件名副本（不带版本号），每次发版覆盖，URL 永远不变、内容永远是最新版；脚本头部的 `@updateURL` / `@downloadURL` 即指向该固定 URL，已安装用户在 Via 脚本管理里点「更新」即可拉到最新版，无需重新导入。
 - 历史版本文件保留不删，便于回滚与对比。
 
 `npm run release` 会更新 `index.html` 的标题、`.ver` 行与两处 `.user.js`、`.txt` 链接；页面底部的版本说明段落（`.note`）是人工撰写的变更描述，脚本不会自动改写，发版时请手动更新。
@@ -88,7 +89,7 @@ git add -A && git commit -m "feat: ..."
 
 ## Installation
 
-1. 下载或复制 [`src/read-frog-lite-via.user.js`](src/read-frog-lite-via.user.js)（或从 `rfvia-publish/` 取对应版本）。
+1. 下载或复制 [`src/read-frog-lite-via.user.js`](src/read-frog-lite-via.user.js)（或从 `rfvia-publish/` 取对应版本；发布页的固定链接 `read-frog-lite-via.user.js` 始终指向最新版）。
 2. 将文件传到 Android 设备，或复制完整脚本内容。
 3. 在 Via 中打开“设置 → 脚本”，从本地导入脚本或新建脚本后粘贴保存。
 4. 启用脚本并刷新网页。页面右侧会出现半隐藏的青蛙悬浮球。

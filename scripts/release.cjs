@@ -7,9 +7,12 @@
  *   1. 从 src/read-frog-lite-via.user.js 的 // @version 读版本号
  *   2. 复制为 rfvia-publish/read-frog-lite-via-v<ver>.user.js
  *      与同名 .txt（.txt 按仓库一贯做法做 CRLF→LF 归一，便于手机上长按复制）
- *   3. 用正则把 rfvia-publish/index.html 里的标题、.ver 行、
+ *   3. 额外复制为固定文件名副本 read-frog-lite-via.user.js 与 read-frog-lite-via.txt
+ *      （URL 永远不变，内容永远是最新版；配合脚本头部 @updateURL/@downloadURL
+ *      实现「发布页固定链接始终指向最新版」。版本未变时也覆盖，保持幂等）
+ *   4. 用正则把 rfvia-publish/index.html 里的标题、.ver 行、
  *      两处 .user.js 链接与 .txt 链接统一到新版本
- *   4. 打印版本号、产物路径、index.html 被改动的行号与内容
+ *   5. 打印版本号、产物路径、index.html 被改动的行号与内容
  *
  * 幂等：版本未变时重复运行结果完全一致（仅重写同样的字节），
  * 并明确提示「版本未变，仅同步副本」。
@@ -75,6 +78,14 @@ function main() {
   fs.writeFileSync(userJsPath, source);
   fs.writeFileSync(txtPath, source.replace(/\r\n/g, "\n"));
 
+  // 1b) 固定文件名副本：URL 永远不变，内容始终为最新版；
+  //     配合脚本头部 @updateURL/@downloadURL，Via 内点「更新」即可拉到最新版。
+  //     与带版本号的文件逐字节一致（.txt 同样做 LF 归一）；版本未变时也覆盖，保持幂等。
+  var fixedUserJsPath = path.join(PUBLISH_DIR, "read-frog-lite-via.user.js");
+  var fixedTxtPath = path.join(PUBLISH_DIR, "read-frog-lite-via.txt");
+  fs.writeFileSync(fixedUserJsPath, source);
+  fs.writeFileSync(fixedTxtPath, source.replace(/\r\n/g, "\n"));
+
   // 2) 同步 index.html
   var oldVersion = publishedVersion || version;
   var result = syncIndexHtml(html, oldVersion, version);
@@ -84,6 +95,8 @@ function main() {
   console.log("版本号: v" + version + (publishedVersion && publishedVersion !== version ? "（页面原为 v" + publishedVersion + "）" : ""));
   console.log("生成: " + path.relative(ROOT, userJsPath));
   console.log("生成: " + path.relative(ROOT, txtPath) + "（纯文本，LF 归一）");
+  console.log("生成: " + path.relative(ROOT, fixedUserJsPath) + "（固定文件名副本，URL 不变）");
+  console.log("生成: " + path.relative(ROOT, fixedTxtPath) + "（固定文件名副本，纯文本，LF 归一）");
   if (!result.changes.length) {
     console.log("index.html: 无需替换版本号（版本未变，仅同步副本）");
   } else {

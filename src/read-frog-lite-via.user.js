@@ -1,9 +1,11 @@
 // ==UserScript==
 // @name         Read Frog Lite for Via
 // @namespace    https://github.com/iFei7/read-frog-lite-via
-// @version      1.4.1
+// @version      1.4.2
 // @description  为 Via 优化的移动端网页翻译：渐进式翻译、原文切换、自动翻译与多服务支持
 // @author       ifei
+// @updateURL    https://read-frog-via-custom.app.workbuddy.host/read-frog-lite-via.user.js
+// @downloadURL  https://read-frog-via-custom.app.workbuddy.host/read-frog-lite-via.user.js
 // @license      GPL-3.0-only
 // @match        http://*/*
 // @match        https://*/*
@@ -29,6 +31,10 @@
  * https://github.com/iFei7/read-frog-lite-via
  *
  * Licensed under GNU GPL v3.0.
+ *
+ * Local modifications (v1.4.2):
+ * - 固定更新链接：@updateURL/@downloadURL 指向发布页固定地址，发版后同链内容始终为最新版，
+ *   在 Via 脚本管理里点「更新」即可升级，无需重新导入；发布页下载入口同步改用固定链接
  *
  * Local modifications (v1.4.1):
  * - 新增赞助页：内嵌收款二维码（base64，离线可用），入口为 Via 菜单「赞助作者 ☕」
@@ -185,7 +191,7 @@
   // 配置与持久化状态
   // ---------------------------------------------------------------------------
 
-  var VERSION = "1.4.1";
+  var VERSION = "1.4.2";
   // 赞助二维码（内嵌 base64，离线可用；不引外链，避免离线/被墙失效）。
   // 来源：仓库外收款二维码剪贴板图片（JPEG，21917 字节，md5 3817596ebb592282b9b9d3e20a8931fb），
   // 按 ≤200 字符每行切段后 join，解码后与源图字节完全一致。

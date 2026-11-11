@@ -1,11 +1,11 @@
 {
   "name": "read-frog-lite-via",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "description": "面向 Via 浏览器的单文件网页翻译用户脚本（基于上游 Read Frog 定制）",
   "license": "GPL-3.0-only",
   "scripts": {
-    "test": "node tests/test-four-finger.cjs && node tests/test-persist.cjs && node tests/test-view-toggle.cjs && node tests/test-free-providers.cjs && node tests/test-sponsor.cjs",
+    "test": "node tests/test-four-finger.cjs && node tests/test-persist.cjs && node tests/test-view-toggle.cjs && node tests/test-free-providers.cjs && node tests/test-sponsor.cjs && node tests/test-fixed-url.cjs",
     "check": "node --check src/read-frog-lite-via.user.js",
     "release": "node scripts/release.cjs"
   }
