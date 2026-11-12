@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         Read Frog Lite for Via
 // @namespace    https://github.com/iFei7/read-frog-lite-via
-// @version      1.4.2
+// @version      1.4.3
 // @description  为 Via 优化的移动端网页翻译：渐进式翻译、原文切换、自动翻译与多服务支持
 // @author       ifei
-// @updateURL    https://read-frog-via-custom.app.workbuddy.host/read-frog-lite-via.user.js
-// @downloadURL  https://read-frog-via-custom.app.workbuddy.host/read-frog-lite-via.user.js
+// @updateURL    https://read-frog-via-custom.app.workbuddy.host/read-frog-lite-via.user.js?sharecode=ZO5WIVTP7R
+// @downloadURL  https://read-frog-via-custom.app.workbuddy.host/read-frog-lite-via.user.js?sharecode=ZO5WIVTP7R
 // @license      GPL-3.0-only
 // @match        http://*/*
 // @match        https://*/*
@@ -31,6 +31,10 @@
  * https://github.com/iFei7/read-frog-lite-via
  *
  * Licensed under GNU GPL v3.0.
+ *
+ * Local modifications (v1.4.3):
+ * - 更新链接补充平台分享码：托管平台要求所有链接带 sharecode 参数，否则 403；
+ *   @updateURL/@downloadURL 与发布页下载入口均已修正，脚本内更新恢复可用
  *
  * Local modifications (v1.4.2):
  * - 固定更新链接：@updateURL/@downloadURL 指向发布页固定地址，发版后同链内容始终为最新版，
@@ -191,7 +195,7 @@
   // 配置与持久化状态
   // ---------------------------------------------------------------------------
 
-  var VERSION = "1.4.2";
+  var VERSION = "1.4.3";
   // 赞助二维码（内嵌 base64，离线可用；不引外链，避免离线/被墙失效）。
   // 来源：仓库外收款二维码剪贴板图片（JPEG，21917 字节，md5 3817596ebb592282b9b9d3e20a8931fb），
   // 按 ≤200 字符每行切段后 join，解码后与源图字节完全一致。

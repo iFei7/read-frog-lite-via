@@ -1,6 +1,6 @@
 {
   "name": "read-frog-lite-via",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "description": "面向 Via 浏览器的单文件网页翻译用户脚本（基于上游 Read Frog 定制）",
   "license": "GPL-3.0-only",

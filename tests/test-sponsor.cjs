@@ -1,4 +1,4 @@
-// 赞助页源码守卫（v1.4.2）：读 src 源文本做断言，不需要 DOM 桩。
+// 赞助页源码守卫（v1.4.3）：读 src 源文本做断言，不需要 DOM 桩。
 // 二维码一致性校验依赖源 JPEG（仓库外剪贴板图片路径写死，仅本机测试可用；
 // 该图 21917 字节，md5 3817596ebb592282b9b9d3e20a8931fb，已内嵌进脚本，
 // 源图缺失时跳过该项，不视为失败）。
@@ -51,9 +51,9 @@ check("不得出现裸 .sponsor{（无 #rf-via-host 前缀的规则起点）", /
 // ── 版本号 ──
 const headerVersion = (src.match(/^\/\/\s*@version\s+(\d+\.\d+\.\d+)\s*$/m) || [])[1];
 const varVersion = (src.match(/var VERSION = "(\d+\.\d+\.\d+)"/) || [])[1];
-check("@version 为 1.4.2", headerVersion, "1.4.2");
+check("@version 为 1.4.3", headerVersion, "1.4.3");
 check("var VERSION 与 @version 一致", varVersion, headerVersion);
-check("头部注释含 v1.4.2 段", src.includes("Local modifications (v1.4.2)"), true);
+check("头部注释含 v1.4.3 段", src.includes("Local modifications (v1.4.3)"), true);
 
 console.log("");
 console.log("结果：" + pass + " 通过 / " + fail + " 失败");

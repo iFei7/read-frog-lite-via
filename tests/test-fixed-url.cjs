@@ -1,5 +1,5 @@
-// 固定更新链接守卫（v1.4.2）：读源码与发布页文本做断言，不需要 DOM 桩。
-// 覆盖：头部 @updateURL/@downloadURL、版本号、release.cjs 固定名副本逻辑、
+// 固定更新链接守卫（v1.4.3）：读源码与发布页文本做断言，不需要 DOM 桩。
+// 覆盖：头部 @updateURL/@downloadURL（必须带平台分享码）、版本号、release.cjs 固定名副本逻辑、
 // index.html 固定链接；固定名文件若已生成则比对与 src 逐字节一致（未生成则跳过）。
 const fs = require("fs");
 const path = require("path");
@@ -10,6 +10,9 @@ const INDEX_FILE = path.join(ROOT, "rfvia-publish", "index.html");
 const FIXED_JS = path.join(ROOT, "rfvia-publish", "read-frog-lite-via.user.js");
 const FIXED_TXT = path.join(ROOT, "rfvia-publish", "read-frog-lite-via.txt");
 const FIXED_URL = "https://read-frog-via-custom.app.workbuddy.host/read-frog-lite-via.user.js";
+// 托管平台访问控制：所有静态资源必须带 sharecode，裸链接一律 403（v1.4.3 起）
+const SHARECODE = "ZO5WIVTP7R";
+const FIXED_URL_FULL = FIXED_URL + "?sharecode=" + SHARECODE;
 
 const src = fs.readFileSync(SRC_FILE, "utf8");
 const releaseSrc = fs.readFileSync(RELEASE_FILE, "utf8");
@@ -27,16 +30,17 @@ const updateLine = (src.match(/^\/\/\s*@updateURL\s+(\S+)\s*$/m) || [])[1];
 const downloadLine = (src.match(/^\/\/\s*@downloadURL\s+(\S+)\s*$/m) || [])[1];
 check("存在 @updateURL", Boolean(updateLine), true);
 check("存在 @downloadURL", Boolean(downloadLine), true);
-check("@updateURL 为固定链接（不带版本号）", updateLine, FIXED_URL);
-check("@downloadURL 为固定链接（不带版本号）", downloadLine, FIXED_URL);
+check("@updateURL 为固定链接带分享码（不带版本号）", updateLine, FIXED_URL_FULL);
+check("@downloadURL 为固定链接带分享码（不带版本号）", downloadLine, FIXED_URL_FULL);
 check("@updateURL/@downloadURL 位于 @grant 之前", src.indexOf("@updateURL") < src.indexOf("@grant") && src.indexOf("@downloadURL") < src.indexOf("@grant"), true);
+check("裸 URL（不带 sharecode）不得作为 @updateURL/@downloadURL 值出现（防止回退 403）", updateLine !== FIXED_URL && downloadLine !== FIXED_URL, true);
 
 // ── 版本号 ──
 const headerVersion = (src.match(/^\/\/\s*@version\s+(\d+\.\d+\.\d+)\s*$/m) || [])[1];
 const varVersion = (src.match(/var VERSION = "(\d+\.\d+\.\d+)"/) || [])[1];
-check("@version 为 1.4.2", headerVersion, "1.4.2");
+check("@version 为 1.4.3", headerVersion, "1.4.3");
 check("var VERSION 与 @version 一致", varVersion, headerVersion);
-check("头部注释含 v1.4.2 段", src.includes("Local modifications (v1.4.2)"), true);
+check("头部注释含 v1.4.3 段", src.includes("Local modifications (v1.4.3)"), true);
 
 // ── release.cjs 固定名副本逻辑 ──
 check("release.cjs 含固定名 .user.js 写入", releaseSrc.includes('PUBLISH_DIR, "read-frog-lite-via.user.js")'), true);
@@ -45,10 +49,11 @@ check("release.cjs 含固定名 .txt 写入", releaseSrc.includes('PUBLISH_DIR, 
 // ── index.html 固定链接 ──
 const dlHref = (html.match(/class="dl"\s+href="([^"]+)"/) || [])[1];
 const rawHrefs = (html.match(/class="raw"\s+href="([^"]+)"/g) || []).map(function (s) { return (s.match(/href="([^"]+)"/) || [])[1]; });
-check(".dl 按钮指向固定 .user.js", dlHref, "read-frog-lite-via.user.js");
-check(".raw 直链第一条指向固定 .user.js", rawHrefs[0], "read-frog-lite-via.user.js");
-check(".raw 第二条指向固定 .txt", rawHrefs[1], "read-frog-lite-via.txt");
+check(".dl 按钮指向固定 .user.js（带分享码）", dlHref, "read-frog-lite-via.user.js?sharecode=" + SHARECODE);
+check(".raw 直链第一条指向固定 .user.js（带分享码）", rawHrefs[0], "read-frog-lite-via.user.js?sharecode=" + SHARECODE);
+check(".raw 第二条指向固定 .txt（带分享码）", rawHrefs[1], "read-frog-lite-via.txt?sharecode=" + SHARECODE);
 check("页面无带版本号链接（href 不含 v1.4.）", /href="[^"]*v1\.4\./.test(html), false);
+check("index.html 下载链接均带分享码（≥3 处）", (html.match(new RegExp("sharecode=" + SHARECODE, "g")) || []).length >= 3, true);
 check(".note 含固定链接升级说明", html.includes("下载链接固定不变"), true);
 
 // ── 固定名副本与 src 一致（未跑 release 时跳过，不视为失败） ──
